@@ -706,6 +706,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         cameraWrap.cleanup_unfinished_lapses()
     elif "gcode:" in query.data:
         await ws_helper.execute_ws_gcode_script(query.data.replace("gcode:", ""))
+        delete_query = False
     elif "updstatus" in query.data:
         await status_no_confirm(update.effective_message)
         delete_query = False
