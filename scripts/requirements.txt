@@ -3,7 +3,7 @@ anyio==4.8.0 ; python_version>='3.9'
 anyio==4.5.2 ; python_version<='3.8'
 APScheduler==3.11.0
 emoji==2.14.1
-ffmpegcv==0.3.15
+ffmpegcv==0.3.16
 httpcore==1.0.7
 httpx==0.28.1
 idna==3.10

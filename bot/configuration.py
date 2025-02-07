@@ -424,7 +424,7 @@ class TelegramUIConfig(ConfigHelper):
         self.pin_status_single_message: bool = self._get_boolean("pin_status_single_message", default=True)
         self.status_message_m117_update: bool = self._get_boolean("status_message_m117_update", default=False)
         self.send_greeting_message: bool = self._get_boolean("send_greeting_message", default=True)
-        self.status_update_button: bool = self._get_boolean("status_update_button", default=False)
+        self.status_update_button: bool = self._get_boolean("status_update_button", default=True)
         self.require_confirmation: List[str] = self._get_list(
             "require_confirmation", default=["logs", "logs_upload", "shutdown", "restart", "cancel", "fw_restart", "emergency", "reboot", "power", "bot_restart"]
         )

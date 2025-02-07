@@ -160,7 +160,7 @@ class Notifier:
                     continue
                 self._groups_status_messages[group] = sent_message
 
-    async def _send_photo(self, group_only, manual, message):
+    async def _send_photo(self, message: TelegramMessageRepr, group_only: bool = False, manual: bool = False) -> None:
         loop = asyncio.get_running_loop()
         with await loop.run_in_executor(self._executors_pool, self._cam_wrap.take_photo) as photo:
             if not group_only:
@@ -201,7 +201,7 @@ class Notifier:
             if not self._cam_wrap.enabled:
                 await self._send_message(message, manual)
             else:
-                await self._send_photo(group_only, manual, message)
+                await self._send_photo(message, group_only, manual)
         except Exception as ex:
             logger.error(ex)
         finally:
@@ -300,6 +300,13 @@ class Notifier:
         self._klippy.printing_duration = 0
         self._last_m117_status = ""
         self._last_tgnotify_status = ""
+
+        if self._status_message:
+            try:
+                await self._bot.unpin_chat_message(self._chat_id, self._status_message.message_id)
+            except BadRequest as badreq:
+                logger.warning("Failed unpining status message \n%s", badreq)
+
         self._status_message = None
         self._groups_status_messages = {}
         if self._bzz_mess_id != 0:
@@ -320,7 +327,7 @@ class Notifier:
             mess += f"_Last update at {datetime.now():%H:%M:%S}_"
 
         inline_keyboard = None
-        if self._use_status_update_button:
+        if self._use_status_update_button and not finish:
             inline_keyboard = InlineKeyboardMarkup(
                 [
                     [
