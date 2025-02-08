@@ -203,6 +203,8 @@ class Notifier:
             photo.close()
 
     async def _notify(self, message: TelegramMessageRepr, group_only: bool = False, manual: bool = False, finish: bool = False) -> None:
+        if finish:
+            await asyncio.sleep(5)
         try:
             if self._cam_wrap.enabled:
                 await self._send_photo(message, group_only=group_only, manual=manual)
