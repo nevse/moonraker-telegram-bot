@@ -316,7 +316,7 @@ class Camera:
                 if self._rotate_code > -10:
                     image = numpy.rot90(image, k=self._rotate_code, axes=(1, 0))
 
-            ndaarr = image[:, :, [2, 1, 0]].copy() if rgb else image.copy()
+            ndaarr = image[:, :, [2, 1, 0]].copy() if rgb else image.copy()  # type: ignore
             image = None  # type: ignore
             del image, success
 
@@ -372,7 +372,7 @@ class Camera:
                 # Todo: get picture from imgs?
 
             frame = process_video_frame(frame)
-            height, width, channels = frame.shape
+            height, width, channels = frame.shape  # type: ignore
             thumb_bio = self._create_thumb(frame)
             del frame, channels
 
