@@ -11,7 +11,6 @@ from apscheduler.schedulers.base import BaseScheduler  # type: ignore
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaAudio, InputMediaDocument, InputMediaPhoto, InputMediaVideo, Message
 from telegram.constants import ChatAction
 from telegram.error import BadRequest
-from telegram.helpers import escape_markdown
 
 from camera import Camera
 from configuration import ConfigWrapper
@@ -217,12 +216,12 @@ class Notifier:
                 await self.reset_notifications()
 
     # manual notification methods
-    def send_error(self, message: str, logs_upload: bool = False) -> None:
+    def send_error(self, message: str, logs_upload: bool = False, preformat_text: Optional[str] = None) -> None:
+        if preformat_text:
+            message += f"\n<pre>{preformat_text}</pre>"
         if logs_upload:
             message += "\nUpload logs to analyzer /logs_upload\nSend logs to chat /logs"
-        tg_message = TelegramMessageRepr(
-            text=message,
-        )
+        tg_message = TelegramMessageRepr(text=message)
         self._sched.add_job(
             self._send_message,
             kwargs={
@@ -236,9 +235,7 @@ class Notifier:
         )
 
     def send_error_with_photo(self, message: str) -> None:
-        tg_message = TelegramMessageRepr(
-            text=message,
-        )
+        tg_message = TelegramMessageRepr(text=message)
         self._sched.add_job(
             self._notify,
             kwargs={
@@ -326,18 +323,17 @@ class Notifier:
                 self._bzz_mess_id = 0
 
     def _schedule_notification(self, message: str = "", schedule: bool = False, finish: bool = False) -> None:  # pylint: disable=W0613
-        mess = escape_markdown(self._klippy.get_print_stats(message), version=2)
+        mess = self._klippy.get_print_stats(message)
         if self._last_m117_status and "m117_status" in self._message_parts:
-            mess += f"{escape_markdown(self._last_m117_status, version=2)}\n"
+            mess += self._last_m117_status + "\n"
         if self._last_tgnotify_status and "tgnotify_status" in self._message_parts:
-            mess += f"{escape_markdown(self._last_tgnotify_status, version=2)}\n"
+            mess += self._last_tgnotify_status + "\n"
         if "last_update_time" in self._message_parts:
-            mess += f"_Last update at {datetime.now():%H:%M:%S}_"
+            mess += f"<i>Last update at {datetime.now():%H:%M:%S}<i/>"
 
         tg_message = TelegramMessageRepr(
             text=mess,
             silent=self._silent_progress,
-            suppress_escaping=True,
             reply_markup=self.get_status_keyboard(finish=finish),
         )
 
