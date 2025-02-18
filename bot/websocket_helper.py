@@ -275,6 +275,7 @@ class WebSocketHelper:
             # Fixme: add finish printing method in notifier
             self._notifier.send_print_finish()
         elif state == "error":
+            self._notifier.update_status_on_abort(message="Printing was interrupted with an error")
             self._klippy.printing = False
             self._timelapse.is_running = False
             self._notifier.remove_notifier_timer()
@@ -291,6 +292,7 @@ class WebSocketHelper:
             # self._timelapse.send_timelapse()
             self._notifier.send_printer_status_notification(f"Printer state change: {print_stats_loc['state']} \n")
         elif state == "cancelled":
+            self._notifier.update_status_on_abort(message="Printing cancelled")
             self._klippy.paused = False
             self._klippy.printing = False
             self._timelapse.is_running = False
@@ -310,7 +312,6 @@ class WebSocketHelper:
             self._klippy.light_device.device_state = device_state
 
     async def websocket_to_message(self, ws_message):
-        # logger.debug(ws_message)
         json_message = orjson.loads(ws_message)
 
         if "error" in json_message:

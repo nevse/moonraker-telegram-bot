@@ -481,6 +481,20 @@ class Notifier:
                 replace_existing=True,
             )
 
+    async def _update_status_on_abort(self, message) -> None:
+        self._schedule_notification(message=message, finish=True)
+
+    def update_status_on_abort(self, message) -> None:
+        if self._enabled:
+            self._sched.add_job(
+                self._update_status_on_abort,
+                kwargs={"message": message},
+                misfire_grace_time=None,
+                coalesce=False,
+                max_instances=1,
+                replace_existing=True,
+            )
+
     def update_status(self) -> None:
         self._schedule_notification()
 
