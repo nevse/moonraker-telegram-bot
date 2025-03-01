@@ -281,8 +281,9 @@ class WebSocketHelper:
             self._notifier.remove_notifier_timer()
             error_mess = f"Printer state change error: {print_stats_loc['state']}\n"
             if "message" in print_stats_loc and print_stats_loc["message"]:
-                error_mess += f"{print_stats_loc['message']}\n"
-            self._notifier.send_error(error_mess, logs_upload=True)
+                self._notifier.send_error(error_mess, logs_upload=True, preformat_text=print_stats_loc['message'])
+            else:
+                self._notifier.send_error(error_mess, logs_upload=True)
         elif state == "standby":
             self._klippy.printing = False
             self._notifier.remove_notifier_timer()
