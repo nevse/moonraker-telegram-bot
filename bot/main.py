@@ -111,7 +111,7 @@ a_scheduler = AsyncIOScheduler(
 )
 a_scheduler.add_listener(errors_listener, EVENT_JOB_ERROR)
 
-configWrap: ConfigWrapper
+config_wrap: ConfigWrapper
 main_pid = os.getpid()
 cameraWrap: Camera
 timelapse: Timelapse
@@ -148,7 +148,7 @@ async def unknown_chat(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def status_no_confirm(effective_message: Message) -> None:
     is_inline_button_press = effective_message.from_user is not None and effective_message.from_user.id == effective_message.get_bot().id
-    if klippy.printing and not configWrap.notifications.group_only:
+    if klippy.printing and not config_wrap.notifications.group_only:
         notifier.update_status()
     else:
         text = await klippy.get_status()
@@ -173,7 +173,7 @@ async def status(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         logger.warning("Undefined effective message or bot")
         return
 
-    if configWrap.telegram_ui.is_present_in_require_confirmation("status") or configWrap.telegram_ui.confirm_command():
+    if config_wrap.telegram_ui.is_present_in_require_confirmation("status") or config_wrap.telegram_ui.confirm_command():
         await command_confirm_message(update, text="Update status?", callback_mess="status:")
     else:
         await status_no_confirm(update.effective_message)
@@ -183,7 +183,7 @@ async def check_unfinished_lapses(bot: telegram.Bot):
     files = cameraWrap.detect_unfinished_lapses()
     if not files:
         return
-    await bot.send_chat_action(chat_id=configWrap.secrets.chat_id, action=ChatAction.TYPING)
+    await bot.send_chat_action(chat_id=config_wrap.secrets.chat_id, action=ChatAction.TYPING)
     files_keys: List[List[InlineKeyboardButton]] = list(
         map(
             lambda el: [
@@ -212,7 +212,7 @@ async def check_unfinished_lapses(bot: telegram.Bot):
         ]
     )
     await bot.send_message(
-        configWrap.secrets.chat_id,
+        config_wrap.secrets.chat_id,
         text="Unfinished timelapses found\nBuild unfinished timelapse?",
         reply_markup=InlineKeyboardMarkup(files_keys),
         disable_notification=notifier.silent_status,
@@ -228,7 +228,7 @@ async def get_ip(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         logger.warning("Undefined effective message or bot")
         return
 
-    if configWrap.telegram_ui.is_present_in_require_confirmation("ip") or configWrap.telegram_ui.confirm_command():
+    if config_wrap.telegram_ui.is_present_in_require_confirmation("ip") or config_wrap.telegram_ui.confirm_command():
         await command_confirm_message(update, text="Show ip?", callback_mess="ip:")
     else:
         await get_ip_no_confirm(update.effective_message)
@@ -243,12 +243,12 @@ async def get_video_no_confirm(effective_message: Message) -> None:
             disable_notification=notifier.silent_commands,
             do_quote=True,
         )
-        await effective_message.get_bot().send_chat_action(chat_id=configWrap.secrets.chat_id, action=ChatAction.RECORD_VIDEO)
+        await effective_message.get_bot().send_chat_action(chat_id=config_wrap.secrets.chat_id, action=ChatAction.RECORD_VIDEO)
 
         loop_loc = asyncio.get_running_loop()
         (video_bio, thumb_bio, width, height) = await loop_loc.run_in_executor(executors_pool, cameraWrap.take_video)
         await info_reply.edit_text(text="Uploading video")
-        max_upload_file_size: int = configWrap.bot_config.max_upload_file_size
+        max_upload_file_size: int = config_wrap.bot_config.max_upload_file_size
         if video_bio.getbuffer().nbytes > max_upload_file_size * 1024 * 1024:
             await info_reply.edit_text(text=f"Telegram has a {max_upload_file_size}mb restriction...")
         else:
@@ -262,7 +262,7 @@ async def get_video_no_confirm(effective_message: Message) -> None:
                 disable_notification=notifier.silent_commands,
                 do_quote=True,
             )
-            await effective_message.get_bot().delete_message(chat_id=configWrap.secrets.chat_id, message_id=info_reply.message_id)
+            await effective_message.get_bot().delete_message(chat_id=config_wrap.secrets.chat_id, message_id=info_reply.message_id)
 
         video_bio.close()
         thumb_bio.close()
@@ -273,7 +273,7 @@ async def get_video(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         logger.warning("Undefined effective message or bot")
         return
 
-    if configWrap.telegram_ui.is_present_in_require_confirmation("video") or configWrap.telegram_ui.confirm_command():
+    if config_wrap.telegram_ui.is_present_in_require_confirmation("video") or config_wrap.telegram_ui.confirm_command():
         await command_confirm_message(update, text="Get video?", callback_mess="video:")
     else:
         await get_video_no_confirm(update.effective_message)
@@ -300,7 +300,7 @@ async def command_confirm_message(update: Update, text: str, callback_mess: str)
         logger.warning("Undefined effective message or bot")
         return
 
-    await update.effective_message.get_bot().send_chat_action(chat_id=configWrap.secrets.chat_id, action=ChatAction.TYPING)
+    await update.effective_message.get_bot().send_chat_action(chat_id=config_wrap.secrets.chat_id, action=ChatAction.TYPING)
     await update.effective_message.reply_text(
         text,
         reply_markup=confirm_keyboard(callback_mess),
@@ -314,8 +314,8 @@ async def command_confirm_message_ext(update: Update, command: str, confirm_text
         logger.warning("Undefined effective message or bot")
         return
 
-    await update.effective_message.get_bot().send_chat_action(chat_id=configWrap.secrets.chat_id, action=ChatAction.TYPING)
-    if configWrap.telegram_ui.is_present_in_require_confirmation(command) or configWrap.telegram_ui.confirm_command():
+    await update.effective_message.get_bot().send_chat_action(chat_id=config_wrap.secrets.chat_id, action=ChatAction.TYPING)
+    if config_wrap.telegram_ui.is_present_in_require_confirmation(command) or config_wrap.telegram_ui.confirm_command():
         await update.effective_message.reply_text(
             confirm_text,
             reply_markup=confirm_keyboard(callback_mess),
@@ -385,17 +385,17 @@ def prepare_log_files() -> tuple[List[str], bool, Optional[str]]:
     dmesg_success = True
     dmesg_error = None
 
-    if Path(f"{configWrap.bot_config.log_path}/dmesg.txt").exists():
-        Path(f"{configWrap.bot_config.log_path}/dmesg.txt").unlink()
+    if Path(f"{config_wrap.bot_config.log_path}/dmesg.txt").exists():
+        Path(f"{config_wrap.bot_config.log_path}/dmesg.txt").unlink()
 
-    dmesg_res = subprocess.run(f"dmesg -T > {configWrap.bot_config.log_path}/dmesg.txt", shell=True, executable="/bin/bash", check=False, capture_output=True)
+    dmesg_res = subprocess.run(f"dmesg -T > {config_wrap.bot_config.log_path}/dmesg.txt", shell=True, executable="/bin/bash", check=False, capture_output=True)
     if dmesg_res.returncode != 0:
         logger.warning("dmesg file creation error: %s %s", dmesg_res.stdout.decode("utf-8"), dmesg_res.stderr.decode("utf-8"))
         dmesg_error = dmesg_res.stderr.decode("utf-8")
         dmesg_success = False
 
-    if Path(f"{configWrap.bot_config.log_path}/debug.txt").exists():
-        Path(f"{configWrap.bot_config.log_path}/debug.txt").unlink()
+    if Path(f"{config_wrap.bot_config.log_path}/debug.txt").exists():
+        Path(f"{config_wrap.bot_config.log_path}/debug.txt").unlink()
 
     commands = [
         "lsb_release -a",
@@ -411,14 +411,14 @@ def prepare_log_files() -> tuple[List[str], bool, Optional[str]]:
     ]
     for command in commands:
         subprocess.run(
-            f'echo >> {configWrap.bot_config.log_path}/debug.txt;echo "{command}" >> {configWrap.bot_config.log_path}/debug.txt;{command} >> {configWrap.bot_config.log_path}/debug.txt',
+            f'echo >> {config_wrap.bot_config.log_path}/debug.txt;echo "{command}" >> {config_wrap.bot_config.log_path}/debug.txt;{command} >> {config_wrap.bot_config.log_path}/debug.txt',
             shell=True,
             executable="/bin/bash",
             check=False,
         )
 
     files = ["/boot/config.txt", "/boot/cmdline.txt", "/boot/armbianEnv.txt", "/boot/orangepiEnv.txt", "/boot/BoardEnv.txt", "/boot/env.txt"]
-    with open(configWrap.bot_config.log_path + "/debug.txt", mode="a", encoding="utf-8") as debug_file:
+    with open(config_wrap.bot_config.log_path + "/debug.txt", mode="a", encoding="utf-8") as debug_file:
         for file in files:
             try:
                 if Path(file).exists():
@@ -445,19 +445,19 @@ async def send_logs_no_confirm(effective_message: Message) -> None:
     logs_list: List[Union[InputMediaAudio, InputMediaDocument, InputMediaPhoto, InputMediaVideo]] = []
     for log_file in prepare_log_files()[0]:
         try:
-            if Path(f"{configWrap.bot_config.log_path}/{log_file}").exists():
-                with open(f"{configWrap.bot_config.log_path}/{log_file}", "rb") as fh:
+            if Path(f"{config_wrap.bot_config.log_path}/{log_file}").exists():
+                with open(f"{config_wrap.bot_config.log_path}/{log_file}", "rb") as fh:
                     logs_list.append(InputMediaDocument(fh.read(), filename=log_file))
         except FileNotFoundError as err:
             logger.warning(err)
 
     if logs_list:
         await resp_message.edit_text("Uploading logs")
-        await effective_message.get_bot().send_chat_action(chat_id=configWrap.secrets.chat_id, action=ChatAction.UPLOAD_DOCUMENT)
+        await effective_message.get_bot().send_chat_action(chat_id=config_wrap.secrets.chat_id, action=ChatAction.UPLOAD_DOCUMENT)
         await effective_message.reply_media_group(logs_list, disable_notification=notifier.silent_commands, do_quote=True, write_timeout=120)
         await resp_message.edit_text(text=f"{await klippy.get_versions_info()}\nUpload logs to analyzer /logs_upload")
     else:
-        await resp_message.edit_text(text=f"No logs found in log_path `{configWrap.bot_config.log_path}`")
+        await resp_message.edit_text(text=f"No logs found in log_path `{config_wrap.bot_config.log_path}`")
 
 
 async def send_logs(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
@@ -465,7 +465,7 @@ async def send_logs(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         logger.warning("Undefined effective message or bot")
         return
 
-    if configWrap.telegram_ui.is_present_in_require_confirmation("logs") or configWrap.telegram_ui.confirm_command():
+    if config_wrap.telegram_ui.is_present_in_require_confirmation("logs") or config_wrap.telegram_ui.confirm_command():
         await command_confirm_message(update, text="Send logs to chat?", callback_mess="send_logs:")
     else:
         await send_logs_no_confirm(update.effective_message)
@@ -483,18 +483,18 @@ async def upload_logs_no_confirm(effective_message: Message) -> None:
         await resp_message.edit_text(f"Dmesg log file creation error {dmesg_error}")
         return
 
-    if Path(f"{configWrap.bot_config.log_path}/logs.tar.xz").exists():
-        Path(f"{configWrap.bot_config.log_path}/logs.tar.xz").unlink()
+    if Path(f"{config_wrap.bot_config.log_path}/logs.tar.xz").exists():
+        Path(f"{config_wrap.bot_config.log_path}/logs.tar.xz").unlink()
 
-    with tarfile.open(f"{configWrap.bot_config.log_path}/logs.tar.xz", "w:xz") as tar:
+    with tarfile.open(f"{config_wrap.bot_config.log_path}/logs.tar.xz", "w:xz") as tar:
         for file in files_list:
-            if Path(f"{configWrap.bot_config.log_path}/{file}").exists():
-                tar.add(Path(f"{configWrap.bot_config.log_path}/{file}"), arcname=file)
+            if Path(f"{config_wrap.bot_config.log_path}/{file}").exists():
+                tar.add(Path(f"{config_wrap.bot_config.log_path}/{file}"), arcname=file)
 
     await resp_message.edit_text("Uploading logs to parser")
-    await effective_message.get_bot().send_chat_action(chat_id=configWrap.secrets.chat_id, action=ChatAction.UPLOAD_DOCUMENT)
+    await effective_message.get_bot().send_chat_action(chat_id=config_wrap.secrets.chat_id, action=ChatAction.UPLOAD_DOCUMENT)
 
-    with open(f"{configWrap.bot_config.log_path}/logs.tar.xz", "rb") as log_archive_ojb:
+    with open(f"{config_wrap.bot_config.log_path}/logs.tar.xz", "rb") as log_archive_ojb:
         resp = httpx.post(url="https://coderus.openrepos.net/klipper_logs", files={"tarfile": log_archive_ojb}, follow_redirects=False, timeout=25)
         if resp.status_code < 400:
             logs_path = resp.headers["location"]
@@ -510,7 +510,7 @@ async def upload_logs(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         logger.warning("Undefined effective message or bot")
         return
 
-    if configWrap.telegram_ui.is_present_in_require_confirmation("logs_upload") or configWrap.telegram_ui.confirm_command():
+    if config_wrap.telegram_ui.is_present_in_require_confirmation("logs_upload") or config_wrap.telegram_ui.confirm_command():
         await command_confirm_message(update, text="Upload logs?", callback_mess="logs_upload:")
     else:
         await upload_logs_no_confirm(update.effective_message)
@@ -524,7 +524,7 @@ async def restart_bot() -> None:
 
 
 async def power_toggle_no_confirm(effective_message: Message) -> None:
-    await effective_message.get_bot().send_chat_action(chat_id=configWrap.secrets.chat_id, action=ChatAction.TYPING)
+    await effective_message.get_bot().send_chat_action(chat_id=config_wrap.secrets.chat_id, action=ChatAction.TYPING)
     if psu_power_device:
         await effective_message.reply_text(
             "Power " + "Off" if psu_power_device.device_state else "On" + " printer?",
@@ -545,7 +545,7 @@ async def power_toggle(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         logger.warning("Undefined effective message or bot")
         return
 
-    if configWrap.telegram_ui.is_present_in_require_confirmation("power") or configWrap.telegram_ui.confirm_command():
+    if config_wrap.telegram_ui.is_present_in_require_confirmation("power") or config_wrap.telegram_ui.confirm_command():
         await command_confirm_message(update, text="Toggle power device?", callback_mess="power_toggle:")
     else:
         await power_toggle_no_confirm(update.effective_message)
@@ -575,7 +575,7 @@ async def light_toggle(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         logger.warning("Undefined effective message")
         return
 
-    if configWrap.telegram_ui.is_present_in_require_confirmation("light") or configWrap.telegram_ui.confirm_command():
+    if config_wrap.telegram_ui.is_present_in_require_confirmation("light") or config_wrap.telegram_ui.confirm_command():
         await command_confirm_message(update, text="Toggle light device?", callback_mess="light_toggle:")
     else:
         await light_toggle_no_confirm(update.effective_message)
@@ -601,11 +601,11 @@ async def button_lapse_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     )[0].text
 
     info_mess: Message = await context.bot.send_message(
-        chat_id=configWrap.secrets.chat_id,
+        chat_id=config_wrap.secrets.chat_id,
         text=f"Starting time-lapse assembly for {lapse_name}",
         disable_notification=notifier.silent_commands,
     )
-    await context.bot.send_chat_action(chat_id=configWrap.secrets.chat_id, action=ChatAction.RECORD_VIDEO)
+    await context.bot.send_chat_action(chat_id=config_wrap.secrets.chat_id, action=ChatAction.RECORD_VIDEO)
     await timelapse.upload_timelapse(lapse_name, info_mess)
     info_mess = None  # type: ignore
     await query.delete_message()
@@ -676,7 +676,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     if "updstatus" not in query.data:
-        await context.bot.send_chat_action(chat_id=configWrap.secrets.chat_id, action=ChatAction.TYPING)
+        await context.bot.send_chat_action(chat_id=config_wrap.secrets.chat_id, action=ChatAction.TYPING)
 
     await query.answer()
     if query.data == "do_nothing":
@@ -686,7 +686,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 update.effective_message.reply_to_message.message_id,
             )
     elif query.data == "cleanup_timelapse_unfinished":
-        await context.bot.send_message(chat_id=configWrap.secrets.chat_id, text="Removing unfinished timelapses data")
+        await context.bot.send_message(chat_id=config_wrap.secrets.chat_id, text="Removing unfinished timelapses data")
         cameraWrap.cleanup_unfinished_lapses()
     elif "gcode:" in query.data:
         await ws_helper.execute_ws_gcode_script(query.data.replace("gcode:", ""))
@@ -805,7 +805,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 
 async def get_gcode_files_no_confirm(effective_message: Message) -> None:
-    await effective_message.get_bot().send_chat_action(chat_id=configWrap.secrets.chat_id, action=ChatAction.TYPING)
+    await effective_message.get_bot().send_chat_action(chat_id=config_wrap.secrets.chat_id, action=ChatAction.TYPING)
     await effective_message.reply_text(
         "Gcode files to print:",
         reply_markup=await gcode_files_keyboard(),
@@ -819,7 +819,7 @@ async def get_gcode_files(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         logger.warning("Undefined effective message or bot")
         return
 
-    if configWrap.telegram_ui.is_present_in_require_confirmation("files") or configWrap.telegram_ui.confirm_command():
+    if config_wrap.telegram_ui.is_present_in_require_confirmation("files") or config_wrap.telegram_ui.confirm_command():
         await command_confirm_message(update, text="List gcode files?", callback_mess="files:")
     else:
         await get_gcode_files_no_confirm(update.effective_message)
@@ -870,14 +870,14 @@ async def services_keyboard_no_confirm(effective_message: Message) -> None:
         return [
             InlineKeyboardButton(
                 element,
-                callback_data=f"rstrt_srvc:{element}" if configWrap.telegram_ui.is_present_in_require_confirmation("services") else f"rstrt_srv:{element}",
+                callback_data=f"rstrt_srvc:{element}" if config_wrap.telegram_ui.is_present_in_require_confirmation("services") else f"rstrt_srv:{element}",
             )
         ]
 
-    services = configWrap.bot_config.services
+    services = config_wrap.bot_config.services
     service_keys: List[List[InlineKeyboardButton]] = list(map(create_service_button, services))
 
-    await effective_message.get_bot().send_chat_action(chat_id=configWrap.secrets.chat_id, action=ChatAction.TYPING)
+    await effective_message.get_bot().send_chat_action(chat_id=config_wrap.secrets.chat_id, action=ChatAction.TYPING)
     await effective_message.reply_text(
         "Services to operate:",
         reply_markup=InlineKeyboardMarkup(service_keys),
@@ -891,7 +891,7 @@ async def services_keyboard(update: Update, _: ContextTypes.DEFAULT_TYPE) -> Non
         logger.warning("Undefined effective message or bot")
         return
 
-    if configWrap.telegram_ui.is_present_in_require_confirmation("services") or configWrap.telegram_ui.confirm_command():
+    if config_wrap.telegram_ui.is_present_in_require_confirmation("services") or config_wrap.telegram_ui.confirm_command():
         await command_confirm_message(update, text="List services?", callback_mess="services:")
     else:
         await services_keyboard_no_confirm(update.effective_message)
@@ -905,7 +905,7 @@ async def exec_gcode(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
     if update.effective_message.text != "/gcode":
         command = update.effective_message.text.replace("/gcode ", "")
-        if configWrap.telegram_ui.is_present_in_require_confirmation(command) or configWrap.telegram_ui.confirm_gcode() or configWrap.telegram_ui.confirm_command():
+        if config_wrap.telegram_ui.is_present_in_require_confirmation(command) or config_wrap.telegram_ui.confirm_gcode() or config_wrap.telegram_ui.confirm_command():
             await command_confirm_message(update, text=f"Execute gcode:`'{command}'`?", callback_mess=f"gcode:{command}")
         else:
             await ws_helper.execute_ws_gcode_script(command)
@@ -914,13 +914,13 @@ async def exec_gcode(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def get_macros_no_confirm(effective_message: Message) -> None:
-    await effective_message.get_bot().send_chat_action(chat_id=configWrap.secrets.chat_id, action=ChatAction.TYPING)
+    await effective_message.get_bot().send_chat_action(chat_id=config_wrap.secrets.chat_id, action=ChatAction.TYPING)
     files_keys: List[List[InlineKeyboardButton]] = list(
         map(
             lambda el: [
                 InlineKeyboardButton(
                     el,
-                    callback_data=(f"macroc:{el}" if configWrap.telegram_ui.is_present_in_require_confirmation(el) or configWrap.telegram_ui.confirm_macro() else f"macro:{el}"),
+                    callback_data=(f"macroc:{el}" if config_wrap.telegram_ui.is_present_in_require_confirmation(el) or config_wrap.telegram_ui.confirm_macro() else f"macro:{el}"),
                 )
             ],
             klippy.macros,
@@ -940,7 +940,7 @@ async def get_macros(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         logger.warning("Undefined effective message or bot")
         return
 
-    if configWrap.telegram_ui.is_present_in_require_confirmation("macros") or configWrap.telegram_ui.confirm_command():
+    if config_wrap.telegram_ui.is_present_in_require_confirmation("macros") or config_wrap.telegram_ui.confirm_command():
         await command_confirm_message(update, text="List macros?", callback_mess="macros:")
     else:
         await get_macros_no_confirm(update.effective_message)
@@ -953,7 +953,7 @@ async def macros_handler(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
     command = update.effective_message.text.replace("/", "").upper()
     if command in klippy.macros_all:
-        if configWrap.telegram_ui.is_present_in_require_confirmation(command):
+        if config_wrap.telegram_ui.is_present_in_require_confirmation(command):
             await update.effective_message.reply_text(
                 f"Execute marco {command}?",
                 reply_markup=confirm_keyboard(f"macro:{command}"),
@@ -976,7 +976,7 @@ async def upload_file(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         logger.warning("Undefined effective message or bot")
         return
 
-    await update.effective_message.get_bot().send_chat_action(chat_id=configWrap.secrets.chat_id, action=ChatAction.UPLOAD_DOCUMENT)
+    await update.effective_message.get_bot().send_chat_action(chat_id=config_wrap.secrets.chat_id, action=ChatAction.UPLOAD_DOCUMENT)
     doc = update.effective_message.document
     if doc is None or doc.file_name is None:
         await update.effective_message.reply_text(
@@ -1051,10 +1051,10 @@ async def upload_file(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                 do_quote=True,
             )
         else:
-            if await klippy.upload_gcode_file(sending_bio, configWrap.bot_config.upload_path):
+            if await klippy.upload_gcode_file(sending_bio, config_wrap.bot_config.upload_path):
                 start_pre_mess = "Successfully uploaded file:"
                 mess, thumb = await klippy.get_file_info_by_name(
-                    f"{configWrap.bot_config.formatted_upload_path}{sending_bio.name}", f"{start_pre_mess}{configWrap.bot_config.formatted_upload_path}{sending_bio.name}"
+                    f"{config_wrap.bot_config.formatted_upload_path}{sending_bio.name}", f"{start_pre_mess}{config_wrap.bot_config.formatted_upload_path}{sending_bio.name}"
                 )
                 filehash = hashlib.md5(doc.file_name.encode()).hexdigest() + ".gcode"
                 keyboard = [
@@ -1075,7 +1075,7 @@ async def upload_file(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                     reply_markup=InlineKeyboardMarkup(keyboard),
                     disable_notification=notifier.silent_commands,
                     do_quote=True,
-                    caption_entities=[MessageEntity(type="bold", offset=len(start_pre_mess), length=len(f"{configWrap.bot_config.formatted_upload_path}{sending_bio.name}"))],
+                    caption_entities=[MessageEntity(type="bold", offset=len(start_pre_mess), length=len(f"{config_wrap.bot_config.formatted_upload_path}{sending_bio.name}"))],
                 )
                 thumb.close()
                 # Todo: delete uploaded file
@@ -1096,8 +1096,8 @@ def bot_error_handler(_: object, context: CallbackContext) -> None:
 
 
 def create_keyboard():
-    if not configWrap.telegram_ui.buttons_default:
-        return configWrap.telegram_ui.buttons
+    if not config_wrap.telegram_ui.buttons_default:
+        return config_wrap.telegram_ui.buttons
 
     custom_keyboard = []
     if cameraWrap.enabled:
@@ -1107,7 +1107,7 @@ def create_keyboard():
     if light_power_device:
         custom_keyboard.append("/light")
 
-    keyboard = configWrap.telegram_ui.buttons
+    keyboard = config_wrap.telegram_ui.buttons
     if len(custom_keyboard) > 0:
         keyboard.append(custom_keyboard)
     return keyboard
@@ -1136,7 +1136,7 @@ def bot_commands() -> Dict[str, str]:
         "logs": "get klipper, moonraker, bot logs",
         "logs_upload": "upload logs to analyzer",
     }
-    return {c: a for c, a in commands.items() if c not in configWrap.telegram_ui.hidden_bot_commands}
+    return {c: a for c, a in commands.items() if c not in config_wrap.telegram_ui.hidden_bot_commands}
 
 
 async def help_command_no_confirm(effective_message: Message) -> None:
@@ -1158,7 +1158,7 @@ async def help_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         logger.warning("Undefined effective message")
         return
 
-    if configWrap.telegram_ui.is_present_in_require_confirmation("help") or configWrap.telegram_ui.confirm_command():
+    if config_wrap.telegram_ui.is_present_in_require_confirmation("help") or config_wrap.telegram_ui.confirm_command():
         await command_confirm_message(update, text="Show help?", callback_mess="help:")
     else:
         await help_command_no_confirm(update.effective_message)
@@ -1187,28 +1187,28 @@ def prepare_commands_list(macros: List[str], add_macros: bool):
 
 
 async def greeting_message(bot: telegram.Bot) -> None:
-    if configWrap.secrets.chat_id == 0:
+    if config_wrap.secrets.chat_id == 0:
         return
 
-    if configWrap.telegram_ui.send_greeting_message:
+    if config_wrap.telegram_ui.send_greeting_message:
         response = await klippy.check_connection()
         mess = ""
         if response:
             mess += f"Bot online, no moonraker connection!\n {response} \nFailing..."
         else:
             mess += "Printer online on " + get_local_ip()
-            if configWrap.configuration_errors:
-                mess += await klippy.get_versions_info(bot_only=True) + configWrap.configuration_errors
+            if config_wrap.configuration_errors:
+                mess += await klippy.get_versions_info(bot_only=True) + config_wrap.configuration_errors
 
         await bot.send_message(
-            configWrap.secrets.chat_id,
+            config_wrap.secrets.chat_id,
             text=mess,
             parse_mode=ParseMode.HTML,
             reply_markup=ReplyKeyboardMarkup(create_keyboard(), resize_keyboard=True),
             disable_notification=notifier.silent_status,
         )
 
-    await bot.set_my_commands(commands=prepare_commands_list(await klippy.get_macros_force(), configWrap.telegram_ui.include_macros_in_command_list))
+    await bot.set_my_commands(commands=prepare_commands_list(await klippy.get_macros_force(), config_wrap.telegram_ui.include_macros_in_command_list))
     await klippy.add_bot_announcements_feed()
     await check_unfinished_lapses(bot)
 
@@ -1228,7 +1228,7 @@ def get_local_ip():
 def start_bot(bot_token, socks):
     app_builder = Application.builder()
     (
-        app_builder.base_url(configWrap.bot_config.api_url)
+        app_builder.base_url(config_wrap.bot_config.api_url)
         .connection_pool_size(265)
         .pool_timeout(1)
         .connect_timeout(10)
@@ -1249,7 +1249,7 @@ def start_bot(bot_token, socks):
 
     application = app_builder.build()
 
-    application.add_handler(MessageHandler(~filters.Chat(configWrap.secrets.chat_id), unknown_chat))
+    application.add_handler(MessageHandler(~filters.Chat(config_wrap.secrets.chat_id), unknown_chat))
 
     application.add_handler(CallbackQueryHandler(button_lapse_handler, pattern="lapse:"))
     application.add_handler(CallbackQueryHandler(print_file_dialog_handler, pattern=re.compile("^\\S[^\\:]+\\.gcode$")))
@@ -1318,12 +1318,12 @@ if __name__ == "__main__":
     # Todo: os.chdir(Path(sys.path[0]).parent.absolute())
     os.chdir(sys.path[0])
 
-    configWrap = ConfigWrapper(system_args.configfile)
-    configWrap.bot_config.log_path_update(system_args.logfile)
-    configWrap.dump_config_to_log()
+    config_wrap = ConfigWrapper(system_args.configfile)
+    config_wrap.bot_config.log_path_update(system_args.logfile)
+    config_wrap.dump_config_to_log()
 
     rotating_handler = RotatingFileHandler(
-        configWrap.bot_config.log_file,
+        config_wrap.bot_config.log_file,
         maxBytes=26214400,
         backupCount=3,
     )
@@ -1335,10 +1335,10 @@ if __name__ == "__main__":
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("httpcore").addHandler(rotating_handler)
 
-    if configWrap.parsing_errors or configWrap.unknown_fields:
-        logger.error(configWrap.parsing_errors + "\n" + configWrap.unknown_fields)
+    if config_wrap.parsing_errors or config_wrap.unknown_fields:
+        logger.error(config_wrap.parsing_errors + "\n" + config_wrap.unknown_fields)
 
-    if configWrap.bot_config.debug:
+    if config_wrap.bot_config.debug:
         faulthandler.enable()
         logger.setLevel(logging.DEBUG)
         logging.getLogger("apscheduler").addHandler(rotating_handler)
@@ -1346,24 +1346,24 @@ if __name__ == "__main__":
         logging.getLogger("httpx").setLevel(logging.DEBUG)
         # logging.getLogger("httpcore").setLevel(logging.DEBUG)
 
-    klippy = Klippy(configWrap, rotating_handler)
+    klippy = Klippy(config_wrap, rotating_handler)
 
-    light_power_device = PowerDevice(configWrap.bot_config.light_device_name, klippy)
-    psu_power_device = PowerDevice(configWrap.bot_config.poweroff_device_name, klippy)
+    light_power_device = PowerDevice(config_wrap.bot_config.light_device_name, klippy)
+    psu_power_device = PowerDevice(config_wrap.bot_config.poweroff_device_name, klippy)
 
     klippy.psu_device = psu_power_device
     klippy.light_device = light_power_device
 
     cameraWrap = (
-        MjpegCamera(configWrap, klippy, rotating_handler)
-        if configWrap.camera.cam_type == "mjpeg"
-        else FFmpegCamera(configWrap, klippy, rotating_handler) if configWrap.camera.cam_type == "ffmpeg" else Camera(configWrap, klippy, rotating_handler)
+        MjpegCamera(config_wrap, klippy, rotating_handler)
+        if config_wrap.camera.cam_type == "mjpeg"
+        else FFmpegCamera(config_wrap, klippy, rotating_handler) if config_wrap.camera.cam_type == "ffmpeg" else Camera(config_wrap, klippy, rotating_handler)
     )
-    bot_updater = start_bot(configWrap.secrets.token, configWrap.bot_config.socks_proxy)
-    timelapse = Timelapse(configWrap, klippy, cameraWrap, a_scheduler, bot_updater.bot, rotating_handler)
-    notifier = Notifier(configWrap, bot_updater.bot, klippy, cameraWrap, a_scheduler, rotating_handler)
+    bot_updater = start_bot(config_wrap.secrets.token, config_wrap.bot_config.socks_proxy)
+    timelapse = Timelapse(config_wrap, klippy, cameraWrap, a_scheduler, bot_updater.bot, rotating_handler)
+    notifier = Notifier(config_wrap, bot_updater.bot, klippy, cameraWrap, a_scheduler, rotating_handler)
 
-    ws_helper = WebSocketHelper(configWrap, klippy, notifier, timelapse, a_scheduler, rotating_handler)
+    ws_helper = WebSocketHelper(config_wrap, klippy, notifier, timelapse, a_scheduler, rotating_handler)
 
     bot_updater.job_queue.run_once(start_scheduler, 1)
     bot_updater.run_polling(allowed_updates=Update.ALL_TYPES)
