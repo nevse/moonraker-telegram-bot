@@ -20,6 +20,7 @@ import tarfile
 from typing import Any, Dict, List, Optional, Union
 from zipfile import ZipFile
 
+import aiofiles
 from apscheduler.events import EVENT_JOB_ERROR  # type: ignore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore
 import emoji
@@ -184,17 +185,7 @@ async def check_unfinished_lapses(bot: telegram.Bot):
     if not files:
         return
     await bot.send_chat_action(chat_id=config_wrap.secrets.chat_id, action=ChatAction.TYPING)
-    files_keys: List[List[InlineKeyboardButton]] = list(
-        map(
-            lambda el: [
-                InlineKeyboardButton(
-                    text=el,
-                    callback_data=f"lapse:{hashlib.md5(el.encode()).hexdigest()}",
-                )
-            ],
-            files,
-        )
-    )
+    files_keys: List[List[InlineKeyboardButton]] = [[InlineKeyboardButton(text=el, callback_data=f"lapse:{hashlib.md5(el.encode()).hexdigest()}")] for el in files]
     files_keys.append(
         [
             InlineKeyboardButton(
@@ -446,8 +437,8 @@ async def send_logs_no_confirm(effective_message: Message) -> None:
     for log_file in prepare_log_files()[0]:
         try:
             if Path(f"{config_wrap.bot_config.log_path}/{log_file}").exists():
-                with open(f"{config_wrap.bot_config.log_path}/{log_file}", "rb") as fh:
-                    logs_list.append(InputMediaDocument(fh.read(), filename=log_file))
+                async with aiofiles.open(f"{config_wrap.bot_config.log_path}/{log_file}", "rb") as fh:
+                    logs_list.append(InputMediaDocument(await fh.read(), filename=log_file))
         except FileNotFoundError as err:
             logger.warning(err)
 
@@ -494,15 +485,16 @@ async def upload_logs_no_confirm(effective_message: Message) -> None:
     await resp_message.edit_text("Uploading logs to parser")
     await effective_message.get_bot().send_chat_action(chat_id=config_wrap.secrets.chat_id, action=ChatAction.UPLOAD_DOCUMENT)
 
-    with open(f"{config_wrap.bot_config.log_path}/logs.tar.xz", "rb") as log_archive_ojb:
-        resp = httpx.post(url="https://coderus.openrepos.net/klipper_logs", files={"tarfile": log_archive_ojb}, follow_redirects=False, timeout=25)
-        if resp.status_code < 400:
-            logs_path = resp.headers["location"]
-            logger.info(logs_path)
-            await resp_message.edit_text(f"Logs are available at https://coderus.openrepos.net{logs_path}")
-        else:
-            logger.error(resp.status_code)
-            await resp_message.edit_text(f"Logs upload failed `{resp.status_code}`")
+    async with aiofiles.open(f"{config_wrap.bot_config.log_path}/logs.tar.xz", "rb") as log_archive_ojb:
+        async with httpx.AsyncClient() as client_loc:
+            resp = await client_loc.post(url="https://coderus.openrepos.net/klipper_logs", files={"tarfile": await log_archive_ojb.read()}, follow_redirects=False, timeout=25)
+            if resp.status_code < 400:
+                logs_path = resp.headers["location"]
+                logger.info(logs_path)
+                await resp_message.edit_text(f"Logs are available at https://coderus.openrepos.net{logs_path}")
+            else:
+                logger.error(resp.status_code)
+                await resp_message.edit_text(f"Logs upload failed `{resp.status_code}`")
 
 
 async def upload_logs(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
@@ -626,7 +618,7 @@ async def print_file_dialog_handler(update: Update, context: ContextTypes.DEFAUL
     if update.effective_message.reply_to_message is None:
         logger.error("Undefined reply_to_message for %s", update.effective_message.to_json())
         return
-    keyboard_keys = dict((x["callback_data"], x["text"]) for x in itertools.chain.from_iterable(query.message.reply_markup.to_dict()["inline_keyboard"]))
+    keyboard_keys = {x["callback_data"]: x["text"] for x in itertools.chain.from_iterable(query.message.reply_markup.to_dict()["inline_keyboard"])}
     pri_filename = keyboard_keys[query.data]
     keyboard = [
         [
@@ -915,17 +907,15 @@ async def exec_gcode(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def get_macros_no_confirm(effective_message: Message) -> None:
     await effective_message.get_bot().send_chat_action(chat_id=config_wrap.secrets.chat_id, action=ChatAction.TYPING)
-    files_keys: List[List[InlineKeyboardButton]] = list(
-        map(
-            lambda el: [
-                InlineKeyboardButton(
-                    el,
-                    callback_data=(f"macroc:{el}" if config_wrap.telegram_ui.is_present_in_require_confirmation(el) or config_wrap.telegram_ui.confirm_macro() else f"macro:{el}"),
-                )
-            ],
-            klippy.macros,
-        )
-    )
+    files_keys: List[List[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                el,
+                callback_data=(f"macroc:{el}" if config_wrap.telegram_ui.is_present_in_require_confirmation(el) or config_wrap.telegram_ui.confirm_macro() else f"macro:{el}"),
+            )
+        ]
+        for el in klippy.macros
+    ]
 
     await effective_message.reply_text(
         "Gcode macros:",

@@ -1,4 +1,4 @@
-FROM python:3.13.4-slim-bookworm
+FROM python:3.13.11-slim-trixie
 
 RUN apt update \
  && apt install -y \

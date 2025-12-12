@@ -28,12 +28,7 @@ class ConfigHelper:
     def _check_config(self) -> str:
         if not self._config.has_section(self._section):
             return ""
-        unknwn = list(
-            map(
-                lambda fil: f"  {fil[0]}: {fil[1]}\n",
-                filter(lambda el: el[0] not in self._KNOWN_ITEMS, self._config.items(self._section)),
-            )
-        )
+        unknwn = [f"  {fil[0]}: {fil[1]}\n" for fil in self._config.items(self._section) if fil[0] not in self._KNOWN_ITEMS]
         if unknwn:
             return f"Unknown/bad items in section [{self._section}]:\n{''.join(unknwn)}\n"
         else:
@@ -299,7 +294,7 @@ class NotifierConfig(ConfigHelper):
 
     def _get_groups_list(self) -> List[Tuple[int, Optional[int]]]:
         els = [self._get_group_with_thread_id(el) for el in self._get_list("groups", default=[], el_type=str)]
-        return list(ell for ell in els if ell is not None)
+        return [ell for ell in els if ell is not None]
 
     def _get_group_with_thread_id(self, group_id: str) -> Optional[Tuple[int, Optional[int]]]:
         try:
@@ -418,7 +413,7 @@ class TelegramUIConfig(ConfigHelper):
         self.silent_commands: bool = self._get_boolean("silent_commands", default=False)
         self.silent_status: bool = self._get_boolean("silent_status", default=False)
         self.include_macros_in_command_list: bool = self._get_boolean("include_macros_in_command_list", default=True)
-        self.hidden_macros: List[str] = list(map(lambda el: el.upper(), self._get_list("hidden_macros", default=[])))
+        self.hidden_macros: List[str] = [el.upper() for el in self._get_list("hidden_macros", default=[])]
         self.hidden_bot_commands: List[str] = self._get_list("hidden_bot_commands", default=[])
         self.show_private_macros: bool = self._get_boolean("show_private_macros", default=False)
         self.pin_status_single_message: bool = self._get_boolean("pin_status_single_message", default=True)

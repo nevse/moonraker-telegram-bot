@@ -141,7 +141,7 @@ class WebSocketHelper:
 
         self.parse_sensors(status_resp)
 
-    async def notify_gcode_reponse(self, message_params):
+    async def notify_gcode_response(self, message_params):
         if self._timelapse.manual_mode:
             if "timelapse start" in message_params:
                 if not self._klippy.printing_filename:
@@ -198,7 +198,6 @@ class WebSocketHelper:
                 self._notifier.schedule_notification(progress=int(message_params_loc["display_status"]["progress"] * 100))
 
         if "toolhead" in message_params_loc and "position" in message_params_loc["toolhead"]:
-            # position_z = json_message["params"][0]['toolhead']['position'][2]
             pass
         if "gcode_move" in message_params_loc and "gcode_position" in message_params_loc["gcode_move"]:
             position_z = message_params_loc["gcode_move"]["gcode_position"][2]
@@ -374,7 +373,7 @@ class WebSocketHelper:
             message_params = json_message["params"]
 
             if message_method == "notify_gcode_response":
-                await self.notify_gcode_reponse(message_params)
+                await self.notify_gcode_response(message_params)
 
             if message_method == "notify_power_changed":
                 for device in message_params:
@@ -409,7 +408,7 @@ class WebSocketHelper:
             lines = file.readlines()
 
         wslines = list(filter(lambda it: " - b'{" in it, lines))
-        messages = list(map(lambda el: el.split(" - b'")[-1].replace("'\n", ""), wslines))
+        messages = [el.split(" - b'")[-1].replace("'\n", "") for el in wslines]
 
         for mes in messages:
             self.websocket_to_message(mes)

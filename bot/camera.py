@@ -615,12 +615,7 @@ class Camera:
     # Todo: check for 64 symbols length in lapse names
     def detect_unfinished_lapses(self) -> List[str]:
         # Todo: detect unstarted timelapse builds? folder with pics and no mp4 files
-        return list(
-            map(
-                lambda el: pathlib.PurePath(el).parent.name,
-                glob.glob(f"{self._base_dir}/*/*.lock"),
-            )
-        )
+        return [pathlib.PurePath(el).parent.name for el in glob.glob(f"{self._base_dir}/*/*.lock")]
 
     def cleanup_unfinished_lapses(self):
         for lapse_name in self.detect_unfinished_lapses():

@@ -301,7 +301,7 @@ class Klippy:
 
     def _get_full_marco_list(self) -> List[str]:
         macro_lines = list(filter(lambda it: "gcode_macro" in it, self._objects_list))
-        loaded_macros = list(map(lambda el: el.split(" ")[1].upper(), macro_lines))
+        loaded_macros = [el.split(" ")[1].upper() for el in macro_lines]
         return loaded_macros
 
     def _get_marco_list(self) -> List[str]:
@@ -463,7 +463,7 @@ class Klippy:
         return message
 
     async def execute_command(self, *command) -> None:
-        await self.make_request("POST", "/api/printer/command", json={"commands": list(map(lambda el: f"{el}", command))})
+        await self.make_request("POST", "/api/printer/command", json={"commands": [f"{el}" for el in command]})
 
     async def execute_gcode_script(self, gcode: str) -> None:
         await self.make_request("GET", f"/printer/gcode/script?script={gcode}")

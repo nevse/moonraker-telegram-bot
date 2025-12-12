@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 from typing import Dict, List, Optional, Tuple, Union
 
+import aiofiles
 from apscheduler.schedulers.base import BaseScheduler  # type: ignore
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaAudio, InputMediaDocument, InputMediaPhoto, InputMediaVideo, Message
 from telegram.constants import ChatAction
@@ -515,7 +516,7 @@ class Notifier:
         if path_match:
             path = [path_match.group(1)]
         elif path_list_math:
-            path = list(map(lambda el: el.group(1), re.finditer(r"(?:\,*\s*\'(.[^\']*)\'\,*\s*)", path_list_math.group(0))))
+            path = [el.group(1) for el in re.finditer(r"(?:\,*\s*\'(.[^\']*)\'\,*\s*)", path_list_math.group(0))]
         else:
             path = [""]
         return path
@@ -532,8 +533,8 @@ class Notifier:
                 bio = BytesIO()
                 bio.name = path_obj.name
 
-                with open(path_obj, "rb") as fh:
-                    bio.write(fh.read())
+                async with aiofiles.open(path_obj, "rb") as fh:
+                    bio.write(await fh.read())
                 bio.seek(0)
                 if bio.getbuffer().nbytes > 10485760:
                     await self._bot.send_message(self._chat_id, text=f"Telegram bots have a 10mb filesize restriction for images, image couldn't be uploaded: `{path}`")
@@ -576,8 +577,8 @@ class Notifier:
                 bio = BytesIO()
                 bio.name = path_obj.name
 
-                with open(path_obj, "rb") as fh:
-                    bio.write(fh.read())
+                async with aiofiles.open(path_obj, "rb") as fh:
+                    bio.write(await fh.read())
                 bio.seek(0)
                 if bio.getbuffer().nbytes > self._max_upload_file_size * 1024 * 1024:
                     await self._bot.send_message(self._chat_id, text=f"Telegram bots have a {self._max_upload_file_size}mb filesize restriction, video couldn't be uploaded: `{path}`")
@@ -621,8 +622,8 @@ class Notifier:
                 bio = BytesIO()
                 bio.name = path_obj.name
 
-                with open(path_obj, "rb") as fh:
-                    bio.write(fh.read())
+                async with aiofiles.open(path_obj, "rb") as fh:
+                    bio.write(await fh.read())
                 bio.seek(0)
                 if bio.getbuffer().nbytes > self._max_upload_file_size * 1024 * 1024:
                     await self._bot.send_message(self._chat_id, text=f"Telegram bots have a {self._max_upload_file_size}mb filesize restriction, document couldn't be uploaded: `{path}`")
