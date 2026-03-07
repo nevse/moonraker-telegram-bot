@@ -60,11 +60,12 @@ class SensitiveFormatter(logging.Formatter):
         return self._filter(original)
 
 
+LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s"
 console_handler = logging.StreamHandler(sys.stdout)
-console_handler.setFormatter(SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s"))
+console_handler.setFormatter(SensitiveFormatter(LOG_FORMAT))
 logging.basicConfig(
     handlers=[console_handler],
-    format="%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s",
+    format=LOG_FORMAT,
     level=logging.INFO,
 )
 
@@ -823,7 +824,7 @@ async def gcode_files_keyboard(offset: int = 0):
         return [
             InlineKeyboardButton(
                 filename,
-                callback_data=hashlib.md5(filename.encode()).hexdigest() + ".gcode",
+                callback_data=f"{hashlib.md5(filename.encode()).hexdigest()}.gcode",
             )
         ]
 
@@ -1046,7 +1047,7 @@ async def upload_file(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
                 mess, thumb = await klippy.get_file_info_by_name(
                     f"{config_wrap.bot_config.formatted_upload_path}{sending_bio.name}", f"{start_pre_mess}{config_wrap.bot_config.formatted_upload_path}{sending_bio.name}"
                 )
-                filehash = hashlib.md5(doc.file_name.encode()).hexdigest() + ".gcode"
+                filehash = f"{hashlib.md5(doc.file_name.encode()).hexdigest()}.gcode"
                 keyboard = [
                     [
                         InlineKeyboardButton(
@@ -1317,7 +1318,7 @@ if __name__ == "__main__":
         maxBytes=26214400,
         backupCount=3,
     )
-    rotating_handler.setFormatter(SensitiveFormatter("%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s"))
+    rotating_handler.setFormatter(SensitiveFormatter(LOG_FORMAT))
     logger.addHandler(rotating_handler)
 
     logging.getLogger("httpx").setLevel(logging.WARNING)

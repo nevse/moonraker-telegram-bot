@@ -1,6 +1,7 @@
 FROM python:3.13.11-trixie
 
-RUN apt update \
+RUN apt update  \
+ && export DEBIAN_FRONTEND=noninteractive \
  && apt install -y \
       ffmpeg x264 libx264-dev libuv1 \
       libwebp-dev libtiff5-dev libjpeg*-turbo libjpeg*-turbo-dev libopenjp2-7-dev  \

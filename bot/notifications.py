@@ -323,7 +323,7 @@ class Notifier:
             finally:
                 self._bzz_mess_id = 0
 
-    def _schedule_notification(self, message: str = "", schedule: bool = False, finish: bool = False) -> None:  # pylint: disable=W0613
+    def _schedule_notification(self, message: str = "", finish: bool = False) -> None:  # pylint: disable=W0613
         mess = self._klippy.get_print_stats(message)
         if self._last_m117_status and "m117_status" in self._message_parts:
             mess += self._last_m117_status + "\n"
@@ -347,21 +347,6 @@ class Notifier:
             replace_existing=False,
         )
 
-        # if schedule:
-        #     self._sched.add_job(
-        #         self._notify,
-        #         kwargs={
-        #             "message": tg_message,
-        #             "group_only": self._group_only,
-        #         },
-        #         misfire_grace_time=None,
-        #         coalesce=False,
-        #         max_instances=6,
-        #         replace_existing=False,
-        #     )
-        # else:
-        #     self._notify(tg_message, self._group_only)
-
     def schedule_notification(self, progress: int = 0, position_z: int = 0) -> None:
         if not self._klippy.printing or self._klippy.printing_duration <= 0.0 or (self._height == 0 and self._percent == 0):
             return
@@ -382,7 +367,7 @@ class Notifier:
                 notify = True
 
         if notify:
-            self._schedule_notification(schedule=True)
+            self._schedule_notification()
 
     def _notify_by_time(self) -> None:
         if not self._klippy.printing or self._klippy.printing_duration <= 0.0:
