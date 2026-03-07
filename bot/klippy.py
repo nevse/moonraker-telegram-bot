@@ -266,8 +266,9 @@ class Klippy:
         return self._printing_filename
 
     async def set_printing_filename(self, new_value: str):
-        if not new_value:
+        if new_value == self._printing_filename:
             logger.info("'filename' has the same value as the current: %s", new_value)
+            # Fxime: maybe we should reset file info on all filename updates?
             self._reset_file_info()
             return
 
@@ -275,7 +276,11 @@ class Klippy:
         response = await self.make_request("GET", f"/server/files/metadata?filename={urllib.parse.quote(new_value)}")
         if not response.is_success:
             logger.warning("bad response for file request %s", response.status_code)
+            self.file_print_start_time = time.time()
+            self.filament_total = 0.0
+            self.filament_weight = 0.0
             return
+
         resp = orjson.loads(response.text)["result"]
         self.file_estimated_time = resp["estimated_time"] if resp.get("estimated_time") else 0.0
         self.file_print_start_time = resp["print_start_time"] if resp.get("print_start_time") else time.time()
