@@ -31,18 +31,19 @@ Pre-commit runs all checks. CI runs these on Python 3.9–3.12:
 pre-commit run --all-files
 
 # Individual tools
-black bot/ tests/                  # Auto-format
-isort bot/ tests/                  # Sort imports
-mypy bot/ tests/                   # Type checking
-pylint bot/                        # Lint (excludes bot/assets/ and tests/)
+ruff check bot/ tests/             # Lint (E, F, W, I rules)
+ruff format bot/ tests/            # Auto-format
+mypy bot/                          # Type checking
 ```
 
 ### Linter Configuration (pyproject.toml)
 
-- **Line length**: 200 characters (black, isort, pylint all use this)
-- **isort profile**: `"black"` with `force_sort_within_sections = true`, `combine_as_imports = true`
-- **pylint**: Many checks disabled — no docstring requirements, broad-except allowed,
-  import ordering delegated to isort. `bot/assets/` and `tests/` are excluded from pylint.
+- **Line length**: 200 characters (ruff formatter and mypy use this)
+- **ruff linting**: Enabled rules: E (pycodestyle), F (Pyflakes), W (warnings), I (isort)
+  - Disabled: E501 (line length, handled by formatter), E722 (bare except — existing pattern)
+- **ruff import sorting**: Uses isort-compatible settings with `force-sort-within-sections = true`
+  and `combine-as-imports = true`. First-party modules: `camera`, `configuration`, `klippy`,
+  `notifications`, `timelapse`, `websocket_helper`, `telegram_helper`.
 - **mypy**: Used via pre-commit; untyped third-party libs use `# type: ignore` inline comments.
 
 ## Testing
@@ -78,13 +79,13 @@ pytest -v -k "secrets"
 ### Formatting
 
 - **Max line length**: 200 characters.
-- **Formatter**: Black with default settings except line length.
+- **Formatter**: ruff with default settings except line length.
 - **Trailing whitespace**: Removed (enforced by pre-commit).
 - **End of file**: Single newline (enforced by pre-commit).
 
 ### Imports
 
-Imports are organized by isort with the `"black"` profile:
+Imports are organized by ruff's isort-compatible import sorting:
 
 1. Standard library imports (one per line, alphabetical)
 2. Blank line
@@ -140,7 +141,7 @@ from klippy import Klippy
 ### Error Handling
 
 - Catch specific exceptions where possible (`httpx.HTTPError`, `BadRequest`, `FileNotFoundError`).
-- Broad `except Exception` is used at boundaries (top-level handlers, connection loops) — pylint's
+- Broad `except Exception` is used at boundaries (top-level handlers, connection loops) — ruff's
   `broad-except` rule is disabled.
 - Log errors with `logger.error(...)` including `exc_info=True` for tracebacks when useful.
 - HTTP responses: Check `response.is_success` or call `response.raise_for_status()`.
@@ -171,7 +172,7 @@ Docker Compose files: `docker-compose.yml` (prod) and `docker-compose-dev.yml` (
 
 GitHub Actions (`.github/workflows/ci.yaml`) runs on push to `master`/`development` and PRs:
 
-1. Pre-commit checks on all files (black, isort, mypy, pylint)
+1. Pre-commit checks on all files (ruff check, ruff format, mypy)
 2. pytest
 3. Docker build (on success, pushes images for non-PR events)
 
