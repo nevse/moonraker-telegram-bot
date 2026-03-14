@@ -21,8 +21,8 @@ from typing import Any, Dict, List, Optional, Union
 from zipfile import ZipFile
 
 import aiofiles
-from apscheduler.events import EVENT_JOB_ERROR  # type: ignore
-from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore
+from apscheduler.events import EVENT_JOB_ERROR  # type: ignore[import-untyped]
+from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore[import-untyped]
 import emoji
 import httpx
 import orjson
@@ -54,7 +54,7 @@ from timelapse import Timelapse
 from websocket_helper import WebSocketHelper
 
 with contextlib.suppress(ImportError):
-    import uvloop  # type: ignore
+    import uvloop
 
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
@@ -65,10 +65,10 @@ class SensitiveFormatter(logging.Formatter):
     """Formatter that removes sensitive information in urls."""
 
     @staticmethod
-    def _filter(s):
+    def _filter(s: str) -> str:
         return re.sub(r"\d{10}:[0-9A-Za-z_-]{35}", "**************", s)
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         original = logging.Formatter.format(self, record)
         return self._filter(original)
 
@@ -85,7 +85,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def handle_exception(exc_type, exc_value, exc_traceback):
+def handle_exception(exc_type: type[BaseException], exc_value: BaseException, exc_traceback: Any) -> None:
     if issubclass(exc_type, KeyboardInterrupt):
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
         return
@@ -101,7 +101,7 @@ sys.excepthook = handle_exception
 
 
 # some global params
-def errors_listener(event):
+def errors_listener(event: Any) -> None:
     exception_info = f"Job {event.job_id} raised"
     if hasattr(event.exception, "message"):
         exception_info += f"{event.exception.message}\n"
@@ -132,8 +132,8 @@ camera_wrap: Camera
 timelapse: Timelapse
 notifier: Notifier
 klippy: Klippy
-light_power_device: PowerDevice
-psu_power_device: PowerDevice
+light_power_device: Optional[PowerDevice]
+psu_power_device: Optional[PowerDevice]
 ws_helper: WebSocketHelper
 executors_pool: ThreadPoolExecutor = ThreadPoolExecutor(2, thread_name_prefix="bot_pool")
 
@@ -194,7 +194,7 @@ async def status(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         await status_no_confirm(update.effective_message)
 
 
-async def check_unfinished_lapses(bot: telegram.Bot):
+async def check_unfinished_lapses(bot: telegram.Bot) -> None:
     files = camera_wrap.detect_unfinished_lapses()
     if not files:
         return
@@ -331,7 +331,7 @@ async def command_confirm_message_ext(update: Update, command: str, confirm_text
         await command_exec(effective_message=update.effective_message, exec_text=exec_text, exec_func=exec_func)
 
 
-async def command_exec(effective_message: Message, exec_text: str, exec_func: Coroutine[Any, Any, None]):
+async def command_exec(effective_message: Message, exec_text: str, exec_func: Coroutine[Any, Any, None]) -> None:
     if exec_text is not None:
         await effective_message.reply_text(exec_text, do_quote=True)
     await exec_func
@@ -612,7 +612,7 @@ async def button_lapse_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     )
     await context.bot.send_chat_action(chat_id=config_wrap.secrets.chat_id, action=ChatAction.RECORD_VIDEO)
     await timelapse.upload_timelapse(lapse_name, info_mess)
-    info_mess = None  # type: ignore
+    info_mess = None  # type: ignore[assignment]
     await query.delete_message()
     await check_unfinished_lapses(context.bot)
 
@@ -721,6 +721,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await query.delete_message()
         await command_exec(effective_message=update.effective_message.reply_to_message, exec_text="Restarting bot", exec_func=restart_bot())
     elif query.data == "power_off_printer":
+        assert psu_power_device is not None
         await psu_power_device.switch_device(False)
         if psu_power_device.device_error:
             mess = f"Device `{psu_power_device.name}` failed to toggle off\nError: {psu_power_device.device_error}"
@@ -732,6 +733,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             do_quote=True,
         )
     elif query.data == "power_on_printer":
+        assert psu_power_device is not None
         await psu_power_device.switch_device(True)
         if psu_power_device.device_error:
             mess = f"Device `{psu_power_device.name}` failed to toggle on\nError: {psu_power_device.device_error}"
@@ -830,8 +832,8 @@ async def get_gcode_files(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         await get_gcode_files_no_confirm(update.effective_message)
 
 
-async def gcode_files_keyboard(offset: int = 0):
-    def create_file_button(element) -> List[InlineKeyboardButton]:
+async def gcode_files_keyboard(offset: int = 0) -> InlineKeyboardMarkup:
+    def create_file_button(element: Dict[str, Any]) -> List[InlineKeyboardButton]:
         filename = element["path"] if "path" in element else element["filename"]
         return [
             InlineKeyboardButton(
@@ -871,7 +873,7 @@ async def gcode_files_keyboard(offset: int = 0):
 
 
 async def services_keyboard_no_confirm(effective_message: Message) -> None:
-    def create_service_button(element) -> List[InlineKeyboardButton]:
+    def create_service_button(element: str) -> List[InlineKeyboardButton]:
         return [
             InlineKeyboardButton(
                 element,
@@ -1094,11 +1096,11 @@ async def upload_file(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     sending_bio.close()
 
 
-def bot_error_handler(_: object, context: CallbackContext) -> None:
+def bot_error_handler(_: object, context: CallbackContext) -> None:  # type: ignore[type-arg]
     logger.error(msg="Exception while handling an update:", exc_info=context.error)
 
 
-def create_keyboard():
+def create_keyboard() -> List[List[str]]:
     if not config_wrap.telegram_ui.buttons_default:
         return config_wrap.telegram_ui.buttons
 
@@ -1167,7 +1169,7 @@ async def help_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         await help_command_no_confirm(update.effective_message)
 
 
-def prepare_command(marco: str):
+def prepare_command(marco: str) -> Optional[BotCommand]:
     if re.match("^[a-zA-Z0-9_]{1,32}$", marco):
         try:
             return BotCommand(marco.lower(), marco)
@@ -1179,10 +1181,10 @@ def prepare_command(marco: str):
         return None
 
 
-def prepare_commands_list(macros: List[str], add_macros: bool):
+def prepare_commands_list(macros: List[str], add_macros: bool) -> List[Any]:
     commands = list(bot_commands().items())
     if add_macros:
-        commands += list(filter(lambda el: el, map(prepare_command, macros)))
+        commands += list(filter(lambda el: el, map(prepare_command, macros)))  # type: ignore[arg-type]
         if len(commands) >= 100:
             logger.warning("Commands list too large!")
             commands = commands[0:99]
@@ -1217,11 +1219,11 @@ async def greeting_message(bot: telegram.Bot) -> None:
     await check_unfinished_lapses(bot)
 
 
-def get_local_ip():
+def get_local_ip() -> str:
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         sock.connect(("192.255.255.255", 1))
-        ip_address = sock.getsockname()[0]
+        ip_address: str = sock.getsockname()[0]
     except Exception:
         ip_address = "127.0.0.1"
     finally:
@@ -1229,7 +1231,7 @@ def get_local_ip():
     return ip_address
 
 
-def start_bot(bot_token, socks):
+def start_bot(bot_token: str, socks: str) -> Application:  # type: ignore[type-arg]
     app_builder = Application.builder()
     (
         app_builder.base_url(config_wrap.bot_config.api_url)
@@ -1285,12 +1287,12 @@ def start_bot(bot_token, socks):
 
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), echo_unknown))
 
-    application.add_error_handler(bot_error_handler)
+    application.add_error_handler(bot_error_handler)  # type: ignore[arg-type]
 
     return application
 
 
-async def start_scheduler(context: ContextTypes.DEFAULT_TYPE):
+async def start_scheduler(context: ContextTypes.DEFAULT_TYPE) -> None:
     a_scheduler.start()
     a_scheduler.add_job(
         greeting_message,
@@ -1352,8 +1354,8 @@ if __name__ == "__main__":
 
     klippy = Klippy(config_wrap, rotating_handler)
 
-    light_power_device = PowerDevice(config_wrap.bot_config.light_device_name, klippy)
-    psu_power_device = PowerDevice(config_wrap.bot_config.poweroff_device_name, klippy)
+    light_power_device = PowerDevice(config_wrap.bot_config.light_device_name, klippy) if config_wrap.bot_config.light_device_name else None
+    psu_power_device = PowerDevice(config_wrap.bot_config.poweroff_device_name, klippy) if config_wrap.bot_config.poweroff_device_name else None
 
     klippy.psu_device = psu_power_device
     klippy.light_device = light_power_device
@@ -1373,6 +1375,7 @@ if __name__ == "__main__":
 
     ws_helper = WebSocketHelper(config_wrap, klippy, notifier, timelapse, a_scheduler, rotating_handler)
 
+    assert bot_updater.job_queue is not None
     bot_updater.job_queue.run_once(start_scheduler, 1)
     bot_updater.run_polling(allowed_updates=Update.ALL_TYPES)
 

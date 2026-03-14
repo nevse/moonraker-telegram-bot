@@ -54,20 +54,20 @@ class ConfigHelper:
         if max_value is not None and value > max_value:
             self._parsing_errors.append(f"Option '{option}: {value}': value is above maximum value {max_value}")
 
-    def _check_string_values(self, option: str, value: str, allowed_values: Optional[List[str]] = None):
+    def _check_string_values(self, option: str, value: str, allowed_values: Optional[List[str]] = None) -> None:
         if not self._config.has_option(self._section, option):
             return
         if allowed_values is not None and value not in allowed_values:
             self._parsing_errors.append(f"Option '{option}: {value}': value '{value}' is not allowed")
 
-    def _check_list_values(self, option: str, values: List[Any], allowed_values: Optional[List[Any]] = None):
+    def _check_list_values(self, option: str, values: List[Any], allowed_values: Optional[List[Any]] = None) -> None:
         if not self._config.has_option(self._section, option):
             return
         unallowed_params = [val for val in values if val not in allowed_values] if allowed_values is not None else []
         if unallowed_params:
             self._parsing_errors.append(f"Option '{option}: {values}': values [" + ",".join(unallowed_params) + "] are not allowed")
 
-    def _get_option_value(self, func: Callable, option: str, default: Optional[Any] = None) -> Any:
+    def _get_option_value(self, func: Callable[..., Any], option: str, default: Optional[Any] = None) -> Any:
         try:
             val = func(self._section, option, fallback=default) if default is not None else func(self._section, option)
         except Exception as ex:
@@ -87,7 +87,7 @@ class ConfigHelper:
         min_value: Optional[Union[int, float]] = None,
         max_value: Optional[Union[int, float]] = None,
     ) -> int:
-        val = self._get_option_value(self._config.getint, option, default)
+        val: int = self._get_option_value(self._config.getint, option, default)
         self._check_numerical_value(option, val, above, below, min_value, max_value)
         return val
 
@@ -100,20 +100,20 @@ class ConfigHelper:
         min_value: Optional[Union[int, float]] = None,
         max_value: Optional[Union[int, float]] = None,
     ) -> float:
-        val = self._get_option_value(self._config.getfloat, option, default)
+        val: float = self._get_option_value(self._config.getfloat, option, default)
         self._check_numerical_value(option, val, above, below, min_value, max_value)
         return val
 
     def _get_str(self, option: str, default: Optional[str] = None, allowed_values: Optional[List[Any]] = None) -> str:
-        val = self._get_option_value(self._config.get, option, default)
+        val: str = self._get_option_value(self._config.get, option, default)
         self._check_string_values(option, val, allowed_values)
         return val
 
     def _get_boolean(self, option: str, default: Optional[bool] = None) -> bool:
-        val = self._get_option_value(self._config.getboolean, option, default)
+        val: bool = self._get_option_value(self._config.getboolean, option, default)
         return val
 
-    def _get_list(self, option: str, default: Optional[List[Any]] = None, el_type: Any = str, allowed_values: Optional[List[Any]] = None) -> List:
+    def _get_list(self, option: str, default: Optional[List[Any]] = None, el_type: Any = str, allowed_values: Optional[List[Any]] = None) -> List[Any]:
         if self._config.has_option(self._section, option):
             try:
                 val = [el_type(el.strip()) for el in self._get_str(option).split(",")]
@@ -218,7 +218,7 @@ class BotConfig(ConfigHelper):
             self._parsing_errors.append("Protocol must be specified in other configuration parameters")
 
     @property
-    def formatted_upload_path(self):
+    def formatted_upload_path(self) -> str:
         if not self.upload_path:
             return ""
         if not self.upload_path.endswith("/"):
@@ -231,7 +231,7 @@ class BotConfig(ConfigHelper):
             self.log_file = logfile
         if not pathlib.PurePath(self.log_file).suffix:
             self.log_file += "/telegram.log"
-        if self.log_file != "/tmp" or pathlib.PurePath(self.log_file).parent != "/tmp":
+        if self.log_file != "/tmp" or str(pathlib.PurePath(self.log_file).parent) != "/tmp":
             Path(pathlib.PurePath(self.log_file).parent).mkdir(parents=True, exist_ok=True)
         self.log_path = pathlib.PurePath(self.log_file).parent.as_posix()
 
@@ -349,7 +349,7 @@ class TimelapseConfig(ConfigHelper):
 
         self._init_paths()
 
-    def _init_paths(self):
+    def _init_paths(self) -> None:
         self.base_dir = os.path.expanduser(self.base_dir)
         if self.enabled:
             Path(self.base_dir).mkdir(parents=True, exist_ok=True)
@@ -496,7 +496,7 @@ class ConfigWrapper:
             + self.status_message_content.parsing_errors
         )
 
-    def dump_config_to_log(self):
+    def dump_config_to_log(self) -> None:
         with open(self.bot_config.log_file, "a", encoding="utf-8") as log_file:
             log_file.write("\n*******************************************************************\n")
             log_file.write("Current Moonraker telegram bot config\n")

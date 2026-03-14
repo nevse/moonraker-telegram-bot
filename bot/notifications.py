@@ -8,7 +8,7 @@ import re
 from typing import Dict, List, Optional, Tuple, Union
 
 import aiofiles
-from apscheduler.schedulers.base import BaseScheduler  # type: ignore
+from apscheduler.schedulers.base import BaseScheduler  # type: ignore[import-untyped]
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaAudio, InputMediaDocument, InputMediaPhoto, InputMediaVideo, Message
 from telegram.constants import ChatAction, ParseMode
 from telegram.error import BadRequest
@@ -84,7 +84,7 @@ class Notifier:
         return self._last_m117_status
 
     @m117_status.setter
-    def m117_status(self, new_value: str):
+    def m117_status(self, new_value: str) -> None:
         self._last_m117_status = new_value
         if self._klippy.printing and self._status_message_m117_update:
             self._schedule_notification()
@@ -94,7 +94,7 @@ class Notifier:
         return self._last_tgnotify_status
 
     @tgnotify_status.setter
-    def tgnotify_status(self, new_value: str):
+    def tgnotify_status(self, new_value: str) -> None:
         self._last_tgnotify_status = new_value
         if self._klippy.printing:
             self._schedule_notification()
@@ -104,7 +104,7 @@ class Notifier:
         return self._percent
 
     @percent.setter
-    def percent(self, new_value: int):
+    def percent(self, new_value: int) -> None:
         if new_value >= 0:
             self._percent = new_value
 
@@ -113,7 +113,7 @@ class Notifier:
         return self._height
 
     @height.setter
-    def height(self, new_value: float):
+    def height(self, new_value: float) -> None:
         if new_value >= 0:
             self._height = new_value
 
@@ -419,46 +419,29 @@ class Notifier:
     async def _send_print_start_info(self) -> None:
         message, bio = await self._klippy.get_file_info(state=PrintState.START)
 
-        if bio is not None:
-            if not self._group_only:
-                status_message = await self._bot.send_photo(
-                    self._chat_id,
-                    photo=bio,
-                    caption=message,
-                    parse_mode=ParseMode.HTML,
-                    reply_markup=self.get_status_keyboard(state=PrintState.START),
-                    disable_notification=self.silent_status,
-                )
-                self._status_message = status_message
+        if not self._group_only:
+            status_message = await self._bot.send_photo(
+                self._chat_id,
+                photo=bio,
+                caption=message,
+                parse_mode=ParseMode.HTML,
+                reply_markup=self.get_status_keyboard(state=PrintState.START),
+                disable_notification=self.silent_status,
+            )
+            self._status_message = status_message
 
-            for group_, message_thread_id in self._notify_groups:
-                bio.seek(0)
-                self._groups_status_messages[group_] = await self._bot.send_photo(
-                    chat_id=group_,
-                    message_thread_id=message_thread_id,
-                    photo=bio,
-                    caption=message,
-                    parse_mode=ParseMode.HTML,
-                    reply_markup=self.get_status_keyboard(state=PrintState.START),
-                    disable_notification=self.silent_status,
-                )
-            bio.close()
-        else:
-            if not self._group_only:
-                status_message = await self._bot.send_message(
-                    chat_id=self._chat_id, text=message, parse_mode=ParseMode.HTML, reply_markup=self.get_status_keyboard(state=PrintState.START), disable_notification=self.silent_status
-                )
-                self._status_message = status_message
-
-            for group_, message_thread_id in self._notify_groups:
-                self._groups_status_messages[group_] = await self._bot.send_message(
-                    chat_id=group_,
-                    message_thread_id=message_thread_id,
-                    text=message,
-                    parse_mode=ParseMode.HTML,
-                    reply_markup=self.get_status_keyboard(state=PrintState.START),
-                    disable_notification=self.silent_status,
-                )
+        for group_, message_thread_id in self._notify_groups:
+            bio.seek(0)
+            self._groups_status_messages[group_] = await self._bot.send_photo(
+                chat_id=group_,
+                message_thread_id=message_thread_id,
+                photo=bio,
+                caption=message,
+                parse_mode=ParseMode.HTML,
+                reply_markup=self.get_status_keyboard(state=PrintState.START),
+                disable_notification=self.silent_status,
+            )
+        bio.close()
 
         if self._pin_status_single_message and self._status_message is not None:
             await self._bot.unpin_all_chat_messages(self._chat_id)
@@ -506,12 +489,12 @@ class Notifier:
         self._schedule_notification()
 
     @staticmethod
-    def _parse_message(ws_message) -> str:
+    def _parse_message(ws_message: str) -> str:
         message_match = re.search(r"message\s*=\s*\'(.[^\']*)\'", ws_message)
         return message_match.group(1) if message_match else ""
 
     @staticmethod
-    def _parse_path(ws_message) -> List[str]:
+    def _parse_path(ws_message: str) -> List[str]:
         path_match = re.search(r"path\s*=\s*\'(.[^\']*)\'", ws_message)
         path_list_math = re.search(r"path\s*=\s*\[(?:\,*\s*\'(.[^\']*)\'\,*\s*)+\]", ws_message)
 
@@ -680,8 +663,8 @@ class Notifier:
             await self._klippy.execute_gcode_script(f'RESPOND PREFIX="Notification params" MSG="Changed Notification params: {response}"')
             await self._klippy.execute_gcode_script(f'RESPOND PREFIX="Notification params" MSG="Full Notification config: {full_conf}"')
 
-    async def send_custom_inline_keyboard(self, message: str):
-        def parse_button(mess: str):
+    async def send_custom_inline_keyboard(self, message: str) -> None:
+        def parse_button(mess: str) -> Optional[InlineKeyboardButton]:
             name = re.search(r"name\s*=\s*\'(.[^\']*)\'", mess)
             command = re.search(r"command\s*=\s*\'(.[^\']*)\'", mess)
             if name and command:

@@ -7,7 +7,7 @@ import logging
 import re
 import threading
 import time
-from typing import Final, List, Tuple
+from typing import Any, Dict, Final, List, Optional, Tuple
 import urllib
 
 import emoji
@@ -39,13 +39,7 @@ class PrintState(Enum):
 
 
 class PowerDevice:
-    def __new__(cls, name: str, klippy_: "Klippy"):
-        if name:
-            return super(PowerDevice, cls).__new__(cls)
-        else:
-            return None
-
-    def __init__(self, name: str, klippy_: "Klippy"):
+    def __init__(self, name: str, klippy_: "Klippy") -> None:
         self.name: str = name
         # Todo: refactor! check lighting lock in camera
         self._state_lock = threading.Lock()
@@ -117,8 +111,8 @@ class Klippy:
         self._show_private_macros: bool = config.telegram_ui.show_private_macros
         self._message_parts: List[str] = config.status_message_content.content
         self._eta_source: str = config.telegram_ui.eta_source
-        self._light_device: PowerDevice
-        self._psu_device: PowerDevice
+        self._light_device: Optional[PowerDevice]
+        self._psu_device: Optional[PowerDevice]
         self._sensors_list: List[str] = config.status_message_content.sensors
         self._heaters_list: List[str] = config.status_message_content.heaters
         self._fans_list: List[str] = config.status_message_content.fans
@@ -154,9 +148,9 @@ class Klippy:
         self._refresh_token: str = ""
 
         # Todo: create sensors class!!
-        self._objects_list: list = []
-        self._sensors_dict: dict = {}
-        self._power_devices: dict = {}
+        self._objects_list: list[str] = []
+        self._sensors_dict: dict[str, Dict[str, Any]] = {}
+        self._power_devices: dict[str, Any] = {}
 
         if logging_handler:
             logger.addHandler(logging_handler)
@@ -167,9 +161,9 @@ class Klippy:
         self._client_sync: Client = Client(verify=self._ssl_verify)
         self._auth_moonraker()
 
-    def prepare_sens_dict_subscribe(self):
+    def prepare_sens_dict_subscribe(self) -> Dict[str, Any]:
         self._sensors_dict = {}
-        sens_dict = {}
+        sens_dict: Dict[str, Any] = {}
 
         for elem in self._objects_list:
             for heat in self._heaters_list:
@@ -188,19 +182,19 @@ class Klippy:
         return self.filament_weight * (self.filament_used / self.filament_total)
 
     @property
-    def psu_device(self) -> PowerDevice:
+    def psu_device(self) -> Optional[PowerDevice]:
         return self._psu_device
 
     @psu_device.setter
-    def psu_device(self, psu_device: PowerDevice):
+    def psu_device(self, psu_device: Optional[PowerDevice]) -> None:
         self._psu_device = psu_device
 
     @property
-    def light_device(self) -> PowerDevice:
+    def light_device(self) -> Optional[PowerDevice]:
         return self._light_device
 
     @light_device.setter
-    def light_device(self, light_device: PowerDevice):
+    def light_device(self, light_device: Optional[PowerDevice]) -> None:
         self._light_device = light_device
 
     @property
@@ -222,7 +216,7 @@ class Klippy:
     def macros(self) -> List[str]:
         return self._get_marco_list()
 
-    async def get_macros_force(self):
+    async def get_macros_force(self) -> List[str]:
         try:
             await self._update_printer_objects()
         except Exception as e:
@@ -238,7 +232,7 @@ class Klippy:
         return self._host
 
     @property
-    def _headers(self):
+    def _headers(self) -> Dict[str, str]:
         heads = {}
         if self._jwt_token:
             heads = {"Authorization": f"Bearer {self._jwt_token}"}
@@ -261,7 +255,7 @@ class Klippy:
 
         return res
 
-    async def _update_printer_objects(self):
+    async def _update_printer_objects(self) -> None:
         resp = await self.make_request("GET", "/printer/objects/list")
         if resp.is_success:
             self._objects_list = orjson.loads(resp.text)["result"]["objects"]
@@ -285,7 +279,7 @@ class Klippy:
     def printing_filename(self) -> str:
         return self._printing_filename
 
-    async def set_printing_filename(self, new_value: str):
+    async def set_printing_filename(self, new_value: str) -> None:
         if new_value == self._printing_filename:
             logger.info("'filename' has the same value as the current: %s", new_value)
             # Fxime: maybe we should reset file info on all filename updates?
@@ -371,7 +365,7 @@ class Klippy:
         except httpx.HTTPError as err:
             logger.error("Failed to refresh token: %s", err)
 
-    async def make_request(self, method, url_path, json=None, files=None, timeout=30) -> httpx.Response:
+    async def make_request(self, method: str, url_path: str, json: Any = None, files: Any = None, timeout: int = 30) -> httpx.Response:
         res = await self._client.request(method, f"{self._host}{url_path}", content=orjson.dumps(json) if json else None, headers=self._headers, files=files, timeout=timeout)
         if res.status_code == 401:  # Unauthorized
             logger.debug("JWT token expired, refreshing...")
@@ -385,7 +379,7 @@ class Klippy:
 
         return res
 
-    def make_request_sync(self, method, url_path, json=None, files=None, timeout=30) -> httpx.Response:
+    def make_request_sync(self, method: str, url_path: str, json: Any = None, files: Any = None, timeout: int = 30) -> httpx.Response:
         res = self._client_sync.request(method, f"{self._host}{url_path}", content=orjson.dumps(json) if json else None, headers=self._headers, files=files, timeout=timeout)
         if res.status_code == 401:  # Unauthorized
             logger.debug("JWT token expired, refreshing...")
@@ -419,7 +413,7 @@ class Klippy:
             await asyncio.sleep(1)
         return f"Connection failed. {last_reason}"
 
-    def update_sensor(self, name: str, value) -> None:
+    def update_sensor(self, name: str, value: Dict[str, Any]) -> None:
         if name not in self._sensors_dict:
             self._sensors_dict[name] = {}
         for key, val in self._SENSOR_PARAMS.items():
@@ -427,7 +421,7 @@ class Klippy:
                 self._sensors_dict[name][key] = value[val]
 
     @staticmethod
-    def _sensor_message(name: str, value) -> str:
+    def _sensor_message(name: str, value: Dict[str, Any]) -> str:
         sens_name = re.sub(r"([A-Z]|\d|_)", r" \1", name).replace("_", "")
         message = ""
 
@@ -453,7 +447,7 @@ class Klippy:
 
         return message
 
-    def update_power_device(self, name: str, value) -> None:
+    def update_power_device(self, name: str, value: Dict[str, Any]) -> None:
         if name not in self._power_devices:
             self._power_devices[name] = {}
         for key, val in self._POWER_DEVICE_PARAMS.items():
@@ -461,7 +455,7 @@ class Klippy:
                 self._power_devices[name][key] = value[val]
 
     @staticmethod
-    def _device_message(name: str, value, emoji_symbol: str = ":vertical_traffic_light:") -> str:
+    def _device_message(name: str, value: Dict[str, Any], emoji_symbol: str = ":vertical_traffic_light:") -> str:
         message = emoji.emojize(f" {emoji_symbol} ", language="alias") + f"{name}: "
         if "status" in value:
             message += f" {value['status']} "
@@ -486,7 +480,7 @@ class Klippy:
                     message += self._device_message(name, value)
         return message
 
-    async def execute_command(self, *command) -> None:
+    async def execute_command(self, *command: str) -> None:
         await self.make_request("POST", "/api/printer/command", json={"commands": [f"{el}" for el in command]})
 
     async def execute_gcode_script(self, gcode: str) -> None:
@@ -645,7 +639,7 @@ class Klippy:
 
         return await self._populate_with_thumb(thumb_path, message)
 
-    async def get_gcode_files(self):
+    async def get_gcode_files(self) -> List[Dict[str, Any]]:
         response = await self.make_request("GET", "/server/files/list?root=gcodes")
         files = sorted(orjson.loads(response.text)["result"], key=lambda item: item["modified"], reverse=True)
         return files
@@ -682,11 +676,11 @@ class Klippy:
             version_message += "\n"
         return version_message
 
-    async def add_bot_announcements_feed(self):
+    async def add_bot_announcements_feed(self) -> None:
         await self.make_request("POST", "/server/announcements/feed?name=moonraker-telegram-bot")
 
     # moonraker database section
-    async def get_param_from_db(self, param_name: str):
+    async def get_param_from_db(self, param_name: str) -> Any:
         res = await self.make_request("GET", f"/server/database/item?namespace={self._dbname}&key={param_name}")
         if res.is_success:
             return orjson.loads(res.text)["result"]["value"]
@@ -695,7 +689,7 @@ class Klippy:
             # Fixme: return default value? check for 404!
             return None
 
-    async def save_param_to_db(self, param_name: str, value) -> None:
+    async def save_param_to_db(self, param_name: str, value: Any) -> None:
         data = {"namespace": self._dbname, "key": param_name, "value": value}
         res = await self.make_request("POST", "/server/database/item", json=data)
         if not res.is_success:
