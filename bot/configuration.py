@@ -374,6 +374,8 @@ class TelegramUIConfig(ConfigHelper):
         "silent_status",
         "pin_status_single_message",
         "send_greeting_message",
+        "greeting_message_extra",
+        "send_startup_photo",
         "buttons",
         "progress_update_message",
         "include_macros_in_command_list",
@@ -423,6 +425,8 @@ class TelegramUIConfig(ConfigHelper):
         self.pin_status_single_message: bool = self._get_boolean("pin_status_single_message", default=True)
         self.status_message_m117_update: bool = self._get_boolean("status_message_m117_update", default=False)
         self.send_greeting_message: bool = self._get_boolean("send_greeting_message", default=True)
+        self.greeting_message_extra: str = "\n".join(line.strip() for line in self._get_str("greeting_message_extra", default="").splitlines()).strip()
+        self.send_startup_photo: bool = self._get_boolean("send_startup_photo", default=False)
         self.require_confirmation: List[str] = self._get_list(
             "require_confirmation", default=["logs", "logs_upload", "shutdown", "restart", "cancel", "fw_restart", "emergency", "reboot", "power", "bot_restart"]
         )
@@ -500,6 +504,19 @@ class ConfigWrapper:
             + self.telegram_ui.parsing_errors
             + self.status_message_content.parsing_errors
         )
+
+    @property
+    def camera_snapshot_urls(self) -> List[str]:
+        urls = []
+        for section in self._config.sections():
+            if section == "camera" or section.startswith("camera "):
+                host = self._config.get(section, "host", fallback="")
+                snapshot = self._config.get(section, "host_snapshot", fallback="")
+                if not snapshot and host:
+                    snapshot = host.replace("stream", "snapshot")
+                if snapshot:
+                    urls.append(snapshot)
+        return urls
 
     def dump_config_to_log(self):
         with open(self.bot_config.log_file, "a", encoding="utf-8") as log_file:

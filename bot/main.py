@@ -1198,6 +1198,8 @@ async def greeting_message(bot: telegram.Bot) -> None:
             mess += f"Bot online, no moonraker connection!\n {response} \nFailing..."
         else:
             mess += "Printer online on " + get_local_ip()
+            if configWrap.telegram_ui.greeting_message_extra:
+                mess += "\n\n" + configWrap.telegram_ui.greeting_message_extra
             if configWrap.configuration_errors:
                 mess += await klippy.get_versions_info(bot_only=True) + configWrap.configuration_errors
 
@@ -1208,6 +1210,23 @@ async def greeting_message(bot: telegram.Bot) -> None:
             reply_markup=ReplyKeyboardMarkup(create_keyboard(), resize_keyboard=True),
             disable_notification=notifier.silent_status,
         )
+        if not response and configWrap.telegram_ui.send_startup_photo:
+            for snapshot_url in configWrap.camera_snapshot_urls:
+                try:
+                    loop_loc = asyncio.get_running_loop()
+                    url = snapshot_url
+                    resp = await loop_loc.run_in_executor(
+                        executors_pool,
+                        lambda: httpx.get(url, timeout=5, verify=False),
+                    )
+                    if resp.is_success:
+                        await bot.send_photo(
+                            chat_id=configWrap.secrets.chat_id,
+                            photo=BytesIO(resp.content),
+                            disable_notification=notifier.silent_status,
+                        )
+                except Exception as err:
+                    logger.error("Greeting photo failed for %s: %s", snapshot_url, err)
 
     await bot.set_my_commands(commands=prepare_commands_list(await klippy.get_macros_force(), configWrap.telegram_ui.include_macros_in_command_list))
     await klippy.add_bot_announcements_feed()
