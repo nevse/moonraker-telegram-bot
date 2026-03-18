@@ -45,7 +45,7 @@ from telegram.constants import ChatAction, ParseMode
 from telegram.error import BadRequest
 from telegram.ext import Application, CallbackContext, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
-from camera import Camera, FFmpegCamera, MjpegCamera, RawStreamCamera
+from camera import CameraSet
 from configuration import ConfigWrapper
 from klippy import Klippy, PowerDevice, PrintState
 from notifications import Notifier
@@ -54,7 +54,7 @@ from timelapse import Timelapse
 from websocket_helper import WebSocketHelper
 
 with contextlib.suppress(ImportError):
-    import uvloop
+    import uvloop  # type: ignore[import-untyped]
 
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
@@ -128,7 +128,7 @@ a_scheduler.add_listener(errors_listener, EVENT_JOB_ERROR)
 
 config_wrap: ConfigWrapper
 main_pid = os.getpid()
-camera_wrap: Camera
+camera_set: CameraSet
 timelapse: Timelapse
 notifier: Notifier
 klippy: Klippy
@@ -168,13 +168,14 @@ async def status_no_confirm(effective_message: Message) -> None:
     else:
         text = await klippy.get_status()
         message = TelegramMessageRepr(text, parse_mode=ParseMode.HTML, silent=notifier.silent_commands, reply_markup=notifier.get_status_keyboard(state=PrintState.STANDBY))
-        if camera_wrap.enabled:
-            loop_loc = asyncio.get_running_loop()
-            with await loop_loc.run_in_executor(executors_pool, camera_wrap.take_photo) as bio:
+        if camera_set.enabled:
+            bio = await camera_set.take_photo()
+            try:
                 if is_inline_button_press:
                     await message.update_existing(effective_message, photo=bio)
                 else:
                     await message.send_as_reply(effective_message, photo=bio)
+            finally:
                 bio.close()
         else:
             if is_inline_button_press:
@@ -195,7 +196,7 @@ async def status(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def check_unfinished_lapses(bot: telegram.Bot) -> None:
-    files = camera_wrap.detect_unfinished_lapses()
+    files = camera_set.detect_unfinished_lapses()
     if not files:
         return
     await bot.send_chat_action(chat_id=config_wrap.secrets.chat_id, action=ChatAction.TYPING)
@@ -240,7 +241,7 @@ async def get_ip(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def get_video_no_confirm(effective_message: Message) -> None:
-    if not camera_wrap.enabled:
+    if not camera_set.enabled:
         await effective_message.reply_text("camera is disabled", do_quote=True)
     else:
         info_reply: Message = await effective_message.reply_text(
@@ -251,7 +252,7 @@ async def get_video_no_confirm(effective_message: Message) -> None:
         await effective_message.get_bot().send_chat_action(chat_id=config_wrap.secrets.chat_id, action=ChatAction.RECORD_VIDEO)
 
         loop_loc = asyncio.get_running_loop()
-        video_bio, thumb_bio, width, height = await loop_loc.run_in_executor(executors_pool, camera_wrap.take_video)
+        video_bio, thumb_bio, width, height = await camera_set.take_video()
         await info_reply.edit_text(text="Uploading video")
         max_upload_file_size: int = config_wrap.bot_config.max_upload_file_size
         if video_bio.getbuffer().nbytes > max_upload_file_size * 1024 * 1024:
@@ -692,7 +693,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             )
     elif query.data == "cleanup_timelapse_unfinished":
         await context.bot.send_message(chat_id=config_wrap.secrets.chat_id, text="Removing unfinished timelapses data")
-        camera_wrap.cleanup_unfinished_lapses()
+        camera_set.cleanup_unfinished_lapses()
     elif "gcode:" in query.data:
         await ws_helper.execute_ws_gcode_script(query.data.replace("gcode:", ""))
         delete_query = False
@@ -1105,7 +1106,7 @@ def create_keyboard() -> List[List[str]]:
         return config_wrap.telegram_ui.buttons
 
     custom_keyboard = []
-    if camera_wrap.enabled:
+    if camera_set.enabled:
         custom_keyboard.append("/video")
     if psu_power_device:
         custom_keyboard.append("/power")
@@ -1201,18 +1202,37 @@ async def greeting_message(bot: telegram.Bot) -> None:
         if response:
             mess += f"Bot online, no moonraker connection!\n {response} \nFailing..."
         else:
-            mess += "Printer online on " + get_local_ip()
+            if config_wrap.telegram_ui.greeting_message_extra:
+                mess += config_wrap.telegram_ui.greeting_message_extra.format(local_ip=get_local_ip())
+            else:
+                mess += "Printer online on " + get_local_ip()
             if config_wrap.configuration_errors:
                 mess += await klippy.get_versions_info(bot_only=True) + config_wrap.configuration_errors
 
         use_keyboard = config_wrap.telegram_ui.send_reply_keyboard
-        await bot.send_message(
-            config_wrap.secrets.chat_id,
-            text=mess,
-            parse_mode=ParseMode.HTML,
-            disable_notification=notifier.silent_status,
-            reply_markup=ReplyKeyboardMarkup(create_keyboard(), resize_keyboard=True) if use_keyboard else ReplyKeyboardRemove(),
-        )
+        reply_markup = ReplyKeyboardMarkup(create_keyboard(), resize_keyboard=True) if use_keyboard else ReplyKeyboardRemove()
+
+        combined_photo: Optional[BytesIO] = None
+        if not response and config_wrap.telegram_ui.send_startup_photo:
+            combined_photo = await camera_set.take_photo()
+
+        if combined_photo:
+            await bot.send_photo(
+                chat_id=config_wrap.secrets.chat_id,
+                photo=combined_photo,
+                caption=mess,
+                parse_mode=ParseMode.HTML,
+                disable_notification=notifier.silent_status,
+                reply_markup=reply_markup,
+            )
+        else:
+            await bot.send_message(
+                config_wrap.secrets.chat_id,
+                text=mess,
+                parse_mode=ParseMode.HTML,
+                disable_notification=notifier.silent_status,
+                reply_markup=reply_markup,
+            )
 
     await bot.set_my_commands(commands=prepare_commands_list(await klippy.get_macros_force(), config_wrap.telegram_ui.include_macros_in_command_list))
     await klippy.add_bot_announcements_feed()
@@ -1360,18 +1380,10 @@ if __name__ == "__main__":
     klippy.psu_device = psu_power_device
     klippy.light_device = light_power_device
 
-    cam_type = config_wrap.camera.cam_type
-    if cam_type == "mjpeg":
-        camera_wrap = MjpegCamera(config_wrap, klippy, rotating_handler)
-    elif cam_type == "ffmpeg":
-        camera_wrap = FFmpegCamera(config_wrap, klippy, rotating_handler)
-    elif cam_type == "raw_stream":
-        camera_wrap = RawStreamCamera(config_wrap, klippy, rotating_handler)
-    else:
-        camera_wrap = Camera(config_wrap, klippy, rotating_handler)
+    camera_set = CameraSet(config_wrap, klippy, executors_pool, rotating_handler)
     bot_updater = start_bot(config_wrap.secrets.token, config_wrap.bot_config.socks_proxy)
-    timelapse = Timelapse(config_wrap, klippy, camera_wrap, a_scheduler, bot_updater.bot, rotating_handler)
-    notifier = Notifier(config_wrap, bot_updater.bot, klippy, camera_wrap, a_scheduler, rotating_handler)
+    timelapse = Timelapse(config_wrap, klippy, camera_set.camera, a_scheduler, bot_updater.bot, rotating_handler)
+    notifier = Notifier(config_wrap, bot_updater.bot, klippy, camera_set, a_scheduler, rotating_handler)
 
     ws_helper = WebSocketHelper(config_wrap, klippy, notifier, timelapse, a_scheduler, rotating_handler)
 

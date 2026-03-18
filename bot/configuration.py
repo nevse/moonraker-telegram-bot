@@ -254,7 +254,8 @@ class CameraConfig(ConfigHelper):
         "type",
     ]
 
-    def __init__(self, config: configparser.ConfigParser):
+    def __init__(self, config: configparser.ConfigParser, section: str = "camera"):
+        self._section = section
         super().__init__(config)
         self.enabled: bool = config.has_section(self._section)
         self.cam_type: str = self._get_str("type", default="mjpeg", allowed_values=["opencv", "ffmpeg", "mjpeg", "raw_stream"])
@@ -366,6 +367,8 @@ class TelegramUIConfig(ConfigHelper):
         "pin_status_single_message",
         "send_greeting_message",
         "send_reply_keyboard",
+        "greeting_message_extra",
+        "send_startup_photo",
         "buttons",
         "progress_update_message",
         "include_macros_in_command_list",
@@ -418,6 +421,8 @@ class TelegramUIConfig(ConfigHelper):
         self.status_message_m117_update: bool = self._get_boolean("status_message_m117_update", default=False)
         self.send_greeting_message: bool = self._get_boolean("send_greeting_message", default=True)
         self.status_update_button: bool = self._get_boolean("status_update_button", default=True)
+        self.greeting_message_extra: str = "\n".join(line.strip() for line in self._get_str("greeting_message_extra", default="").splitlines()).strip()
+        self.send_startup_photo: bool = self._get_boolean("send_startup_photo", default=False)
         self.require_confirmation: List[str] = self._get_list(
             "require_confirmation", default=["logs", "logs_upload", "shutdown", "restart", "cancel", "fw_restart", "emergency", "reboot", "power", "bot_restart"]
         )
@@ -463,24 +468,24 @@ class StatusMessageContentConfig(ConfigHelper):
 class ConfigWrapper:
     def __init__(self, path: str):
         config = configparser.ConfigParser(allow_no_value=True, inline_comment_prefixes=(";", "#"))
-        config.read(path)
+        config.read(path, encoding="utf-8")
 
         for sec in config.sections():
             if sec.startswith("include"):
                 addit_conf = sec.replace("include", "").strip()
-                config.read(pathlib.PurePath(path).parent.joinpath(addit_conf))
+                config.read(pathlib.PurePath(path).parent.joinpath(addit_conf), encoding="utf-8")
 
         self._config = config
         self.secrets = SecretsConfig(config)
         self.bot_config = BotConfig(config)
-        self.camera = CameraConfig(config)
+        self._camera_configs: List[CameraConfig] = [CameraConfig(config, sec) for sec in config.sections() if sec == "camera" or sec.startswith("camera ")]
         self.notifications = NotifierConfig(config)
         self.timelapse = TimelapseConfig(config)
         self.telegram_ui = TelegramUIConfig(config)
         self.status_message_content = StatusMessageContentConfig(config)
         self.unknown_fields = (
             self.bot_config.unknown_fields
-            + self.camera.unknown_fields
+            + "".join(c.unknown_fields for c in self._camera_configs)
             + self.notifications.unknown_fields
             + self.timelapse.unknown_fields
             + self.telegram_ui.unknown_fields
@@ -489,12 +494,20 @@ class ConfigWrapper:
         self.parsing_errors = (
             self.secrets.parsing_errors
             + self.bot_config.parsing_errors
-            + self.camera.parsing_errors
+            + "".join(c.parsing_errors for c in self._camera_configs)
             + self.notifications.parsing_errors
             + self.timelapse.parsing_errors
             + self.telegram_ui.parsing_errors
             + self.status_message_content.parsing_errors
         )
+
+    @property
+    def camera_configs(self) -> List[CameraConfig]:
+        return self._camera_configs
+
+    @property
+    def camera(self) -> CameraConfig:
+        return self._camera_configs[0] if self._camera_configs else CameraConfig(self._config)
 
     def dump_config_to_log(self) -> None:
         with open(self.bot_config.log_file, "a", encoding="utf-8") as log_file:

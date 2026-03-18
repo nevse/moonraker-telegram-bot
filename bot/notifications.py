@@ -1,5 +1,4 @@
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from io import BytesIO
 import logging
@@ -13,7 +12,7 @@ from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, InputMedia
 from telegram.constants import ChatAction, ParseMode
 from telegram.error import BadRequest
 
-from camera import Camera
+from camera import CameraSet
 from configuration import ConfigWrapper
 from klippy import Klippy, PrintState
 from telegram_helper import TelegramMessageRepr
@@ -27,16 +26,15 @@ class Notifier:
         config: ConfigWrapper,
         bot: Bot,
         klippy: Klippy,
-        camera_wrapper: Camera,
+        camera_set_wrapper: CameraSet,
         scheduler: BaseScheduler,
         logging_handler: logging.Handler,
     ):
         self._bot: Bot = bot
         self._chat_id: int = config.secrets.chat_id
-        self._cam_wrap: Camera = camera_wrapper
+        self._camera_set_wrapper: CameraSet = camera_set_wrapper
 
         self._sched: BaseScheduler = scheduler
-        self._executors_pool: ThreadPoolExecutor = ThreadPoolExecutor(2, thread_name_prefix="notifier_pool")
         self._klippy: Klippy = klippy
 
         self._enabled: bool = config.notifications.enabled
@@ -178,8 +176,8 @@ class Notifier:
                 self._groups_status_messages[group] = sent_message
 
     async def _send_photo(self, message: TelegramMessageRepr, group_only: bool = False, manual: bool = False) -> None:
-        loop = asyncio.get_running_loop()
-        with await loop.run_in_executor(self._executors_pool, self._cam_wrap.take_photo) as photo:
+        photo = await self._camera_set_wrapper.take_photo()
+        try:
             if not group_only:
                 if self._status_message and not manual:
                     await message.update_existing(self._status_message, photo=photo)
@@ -200,14 +198,14 @@ class Notifier:
                     if group in self._groups_status_messages or manual:
                         continue
                     self._groups_status_messages[group] = sent_message
-
+        finally:
             photo.close()
 
     async def _notify(self, message: TelegramMessageRepr, group_only: bool = False, manual: bool = False, state: PrintState = PrintState.PRINTING) -> None:
         if state.is_finished:
             await asyncio.sleep(5)
         try:
-            if self._cam_wrap.enabled:
+            if self._camera_set_wrapper.enabled:
                 await self._send_photo(message, group_only=group_only, manual=manual)
             else:
                 await self._send_message(message, group_only=group_only, manual=manual)

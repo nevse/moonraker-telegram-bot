@@ -1,4 +1,5 @@
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import contextlib
 import functools
 from functools import wraps
@@ -26,7 +27,7 @@ from numpy.typing import NDArray
 from PIL import Image, _webp
 from telegram import Message
 
-from configuration import ConfigWrapper
+from configuration import CameraConfig, ConfigWrapper
 from klippy import Klippy, PowerDevice
 
 try:
@@ -84,16 +85,16 @@ def os_nice(value: int) -> None:
 
 
 class Camera:
-    def __init__(self, config: ConfigWrapper, klippy: Klippy, logging_handler: logging.Handler):
-        self.enabled: bool = bool(config.camera.enabled and config.camera.host)
-        self._host = int(config.camera.host) if str.isdigit(config.camera.host) else config.camera.host
-        self._threads: int = config.camera.threads
-        self._flip_vertically: bool = config.camera.flip_vertically
-        self._flip_horizontally: bool = config.camera.flip_horizontally
-        self._fourcc: str = config.camera.fourcc
-        self._video_duration: int = config.camera.video_duration
-        self._video_buffer_size: int = config.camera.video_buffer_size
-        self._stream_fps: int = config.camera.stream_fps
+    def __init__(self, cam_config: CameraConfig, config: ConfigWrapper, klippy: Klippy, logging_handler: logging.Handler):
+        self.enabled: bool = bool(cam_config.enabled and cam_config.host)
+        self._host = int(cam_config.host) if str.isdigit(cam_config.host) else cam_config.host
+        self._threads: int = cam_config.threads
+        self._flip_vertically: bool = cam_config.flip_vertically
+        self._flip_horizontally: bool = cam_config.flip_horizontally
+        self._fourcc: str = cam_config.fourcc
+        self._video_duration: int = cam_config.video_duration
+        self._video_buffer_size: int = cam_config.video_buffer_size
+        self._stream_fps: int = cam_config.stream_fps
         self._klippy: Klippy = klippy
 
         # Todo: refactor into timelapse class
@@ -110,19 +111,19 @@ class Camera:
         self._light_need_off: bool = False
         self._light_need_off_lock: threading.Lock = threading.Lock()
 
-        self.light_timeout: int = config.camera.light_timeout
+        self.light_timeout: int = cam_config.light_timeout
         self.light_device: Optional[PowerDevice] = self._klippy.light_device
         self._camera_lock: threading.Lock = threading.Lock()
         self.light_lock = threading.Lock()
         self.light_timer_event: threading.Event = threading.Event()
         self.light_timer_event.set()
 
-        self._picture_quality = config.camera.picture_quality
+        self._picture_quality = cam_config.picture_quality
         self._img_extension: str
-        if config.camera.picture_quality in ["low", "high"]:
+        if cam_config.picture_quality in ["low", "high"]:
             self._img_extension = "jpeg"
         else:
-            self._img_extension = config.camera.picture_quality
+            self._img_extension = cam_config.picture_quality
 
         self._save_lapse_photos_as_images: bool = config.timelapse.save_lapse_photos_as_images
         self._raw_frame_extension: str = "npz"
@@ -131,11 +132,11 @@ class Camera:
         self._light_request_lock: threading.Lock = threading.Lock()
 
         self._rotate_code: int
-        if config.camera.rotate == "90_cw":
+        if cam_config.rotate == "90_cw":
             self._rotate_code = 1
-        elif config.camera.rotate == "90_ccw":
+        elif cam_config.rotate == "90_ccw":
             self._rotate_code = 3
-        elif config.camera.rotate == "180":
+        elif cam_config.rotate == "180":
             self._rotate_code = 2
         else:
             self._rotate_code = -10
@@ -624,8 +625,8 @@ class Camera:
 
 
 class FFmpegCamera(Camera):
-    def __init__(self, config: ConfigWrapper, klippy: Klippy, logging_handler: logging.Handler):
-        super().__init__(config, klippy, logging_handler)
+    def __init__(self, cam_config: CameraConfig, config: ConfigWrapper, klippy: Klippy, logging_handler: logging.Handler):
+        super().__init__(cam_config, config, klippy, logging_handler)
 
         self._cam_timeout: int = 5
         self.videoinfo = get_info(self._host, self._cam_timeout)
@@ -636,19 +637,19 @@ class FFmpegCamera(Camera):
 
 
 class MjpegCamera(Camera):
-    def __init__(self, config: ConfigWrapper, klippy: Klippy, logging_handler: logging.Handler):
-        super().__init__(config, klippy, logging_handler)
+    def __init__(self, cam_config: CameraConfig, config: ConfigWrapper, klippy: Klippy, logging_handler: logging.Handler):
+        super().__init__(cam_config, config, klippy, logging_handler)
         self._img_extension = "jpeg"
         self._raw_frame_extension: str = "jpeg"
-        self._host = config.camera.host
-        self._host_snapshot = config.camera.host_snapshot or self._host.replace("stream", "snapshot")
+        self._host = cam_config.host
+        self._host_snapshot = cam_config.host_snapshot or self._host.replace("stream", "snapshot")
 
         self._rotate_code_mjpeg: Image.Transpose
-        if config.camera.rotate == "90_cw":
+        if cam_config.rotate == "90_cw":
             self._rotate_code_mjpeg = Image.Transpose.ROTATE_270
-        elif config.camera.rotate == "90_ccw":
+        elif cam_config.rotate == "90_ccw":
             self._rotate_code_mjpeg = Image.Transpose.ROTATE_90
-        elif config.camera.rotate == "180":
+        elif cam_config.rotate == "180":
             self._rotate_code_mjpeg = Image.Transpose.ROTATE_180
         else:
             self._rotate_code_mjpeg = None  # type: ignore[assignment]
@@ -787,8 +788,8 @@ class MjpegCamera(Camera):
 
 
 class RawStreamCamera(MjpegCamera):
-    def __init__(self, config: ConfigWrapper, klippy: Klippy, logging_handler: logging.Handler):
-        super().__init__(config, klippy, logging_handler)
+    def __init__(self, cam_config: CameraConfig, config: ConfigWrapper, klippy: Klippy, logging_handler: logging.Handler):
+        super().__init__(cam_config, config, klippy, logging_handler)
 
         if self._flip_vertically or self._flip_horizontally or self._rotate_code > -10:
             logger.warning("raw_stream camera: flip/rotate not supported for video (stream copy). Use type=ffmpeg if you need video transforms.")
@@ -830,3 +831,77 @@ class RawStreamCamera(MjpegCamera):
             os.remove(filepath)
         video_bio.seek(0)
         return video_bio, thumb_bio, width, height
+
+
+class CameraSet:
+    def __init__(self, config: ConfigWrapper, klippy: Klippy, executors_pool: ThreadPoolExecutor, logging_handler: logging.Handler) -> None:
+        cam_configs = config.camera_configs or [config.camera]
+        self._cameras: List[Camera] = [self._create_camera(cc, config, klippy, logging_handler) for cc in cam_configs]
+        self._executors_pool: ThreadPoolExecutor = executors_pool
+
+    @staticmethod
+    def _create_camera(cam_config: CameraConfig, config: ConfigWrapper, klippy: Klippy, logging_handler: logging.Handler) -> Camera:
+        if cam_config.cam_type == "mjpeg":
+            return MjpegCamera(cam_config, config, klippy, logging_handler)
+        elif cam_config.cam_type == "ffmpeg":
+            return FFmpegCamera(cam_config, config, klippy, logging_handler)
+        elif cam_config.cam_type == "raw_stream":
+            return RawStreamCamera(cam_config, config, klippy, logging_handler)
+        return Camera(cam_config, config, klippy, logging_handler)
+
+    @property
+    def enabled(self) -> bool:
+        return any(cam.enabled for cam in self._cameras)
+
+    @property
+    def camera(self) -> Camera:
+        return self._cameras[0]
+
+    async def take_photo(self) -> BytesIO:
+        loop = asyncio.get_running_loop()
+
+        results = await asyncio.gather(
+            *[loop.run_in_executor(self._executors_pool, cam.take_photo) for cam in self._cameras if cam.enabled],
+            return_exceptions=True,
+        )
+        bios: List[BytesIO] = []
+        images: List[Image.Image] = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.error("Photo capture failed for camera %d: %s", i, result)
+            else:
+                bio: BytesIO = result
+                images.append(Image.open(bio))
+                bios.append(bio)
+
+        if not images:
+            raise RuntimeError("All cameras failed to capture photo")
+        if len(images) == 1:
+            bios[0].seek(0)
+            return bios[0]
+
+        total_width = sum(img.width for img in images)
+        max_height = max(img.height for img in images)
+        combined = Image.new("RGB", (total_width, max_height))
+        x = 0
+        for img in images:
+            combined.paste(img, (x, 0))
+            x += img.width
+        for bio in bios:
+            bio.close()
+
+        out = BytesIO()
+        out.name = "status.jpg"
+        combined.save(out, format="JPEG", quality=95, subsampling=0, optimize=True)
+        out.seek(0)
+        return out
+
+    async def take_video(self) -> Tuple[BytesIO, BytesIO, int, int]:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(self._executors_pool, self.camera.take_video)
+
+    def detect_unfinished_lapses(self) -> List[str]:
+        return self.camera.detect_unfinished_lapses()
+
+    def cleanup_unfinished_lapses(self) -> None:
+        self.camera.cleanup_unfinished_lapses()

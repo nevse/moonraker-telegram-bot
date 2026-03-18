@@ -8,6 +8,7 @@ CONFIG_PATH = "tests/resources/telegram.conf"
 CONFIG_MINIMAL_PATH = "tests/resources/telegram_minimal.conf"
 CONFIG_TEMPLATE_PATH = "scripts/base_install_template"
 CONFIG_WITH_SECRETS_PATH = "tests/resources/telegram_secrets.conf"
+CONFIG_STARTUP_PATH = "tests/resources/telegram_startup.conf"
 
 
 def test_template_config_has_no_errors():
@@ -46,3 +47,43 @@ def test_config_has_no_errors(config_helper):
 
 def test_config_bot_is_valid(config_helper):
     assert config_helper.secrets.chat_id == 16612341234 and config_helper.secrets.token == "23423423334:sdfgsdfg-dfgdfgsdfg"
+
+
+# --- greeting_message_extra ---
+
+
+def test_greeting_message_extra_default(config_helper):
+    assert config_helper.telegram_ui.greeting_message_extra == ""
+
+
+def test_send_startup_photo_default(config_helper):
+    assert config_helper.telegram_ui.send_startup_photo is False
+
+
+# --- startup config fixture ---
+
+
+@pytest.fixture
+def startup_config():
+    config_path = pathlib.Path(CONFIG_STARTUP_PATH).absolute().as_posix()
+    return ConfigWrapper(config_path)
+
+
+def test_startup_config_has_no_errors(startup_config):
+    assert startup_config.configuration_errors == ""
+
+
+def test_send_startup_photo_enabled(startup_config):
+    assert startup_config.telegram_ui.send_startup_photo is True
+
+
+def test_greeting_message_extra_value(startup_config):
+    extra = startup_config.telegram_ui.greeting_message_extra
+    assert extra.startswith("<b>Printer access:</b>")
+    assert "Local network" in extra
+    assert "VPN" in extra
+
+
+def test_greeting_message_extra_no_leading_whitespace(startup_config):
+    for line in startup_config.telegram_ui.greeting_message_extra.splitlines():
+        assert line == line.strip()
